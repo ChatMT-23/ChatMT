@@ -477,11 +477,14 @@ colore. La composizione è **deterministica**: stessi ingressi, stesso SVG.
 
 | Campo della risposta | Contenuto |
 |---|---|
-| `layout` | `id` (`showcase`, `stack`, `band-right`, `cover`), etichetta, margine di sicurezza |
+| `layout` | `id` (`showcase`, `stack`, `band-right`, `cover`), etichetta, margine di sicurezza; per `showcase` anche `text_top`, `text_bottom`, `rule_y`, `text_overflow`, `text_trimmed` |
 | `copy` | `kicker`, `headline`, `subhead`, `body`, `footer`; se `design.text` è presente, la prima riga/frase diventa la headline e il resto il corpo |
 | `background` | `id`, `label`, `fallback`: lo sfondo generato usato dal composer, o `null`; con un soggetto composto contiene anche `composite: true` e `image: null` (l'immagine è già dentro l'SVG) |
 | `photo` | dimensioni, `treatment`, `resized`, byte, `cutout` (`method`, dimensioni, `foreground_ratio`) e `cutout_reason`; `null` senza foto |
 | `subject` | presente solo quando il ritaglio è riuscito: `composited: true`, `method`, posizione (`x`, `y`, `bottom`) e dimensioni nel flyer |
+| `image` | il flyer rasterizzato in JPEG (`data:image/jpeg;base64,...`), pronto per la galleria del telefono; `null` se la rasterizzazione non è disponibile |
+| `image_mime`, `image_width`, `image_height`, `image_bytes` | formato, dimensioni e peso del JPEG |
+| `image_error` | `null` se il JPEG è stato prodotto, altrimenti il motivo del fallback all'SVG |
 | `actions` | cosa ha fatto l'app, una riga per azione (foto adattata, scrim, testi mandati a capo) |
 | `warnings` | ciò che va dichiarato (nessuna foto/sfondo, colore interrogato) |
 | `svg` / `svg_bytes` | il documento SVG e la sua dimensione |
@@ -508,8 +511,21 @@ Regole:
   foto incorniciata invece di produrre un ritaglio rotto;
 - nessun testo è scritto in memoria: `stored` è `null`.
 
-L'SVG **non entra mai nel documento**: il frontend lo converte in un object URL e lo mostra in un
-`<img>`, con un link di download. La regola "niente `innerHTML`, niente SVG nel DOM" resta vera.
+- il testo è convertito in **tracciati di glifo** con `fontkit` e i font locali
+  (`Gloock`, `Instrument Sans`, `Geist Mono`): il flyer non dipende dai font installati sul
+  telefono, e le righe vengono misurate sui glifi reali prima di andare a capo. Il testo resta
+  leggibile anche in un `<desc>` per l'accessibilità e per la ricerca;
+- il composer misura il blocco di testo e, se serve, riduce prima il corpo e poi il titolo; in
+  casi estremi accorcia il corpo con un'ellissi e lo dichiara in `warnings`. `showcase` espone
+  `text_top`, `text_bottom`, `rule_y`, `text_overflow` e `text_trimmed`;
+- il JPEG viene prodotto con `@resvg/resvg-js` (SVG → PNG) e Jimp (PNG → JPEG, qualità 92). È il
+  formato che la pagina pubblica mostra e scarica: una galleria del telefono non apre l'SVG. Se
+  la rasterizzazione fallisce, `image` è `null`, `image_error` spiega il motivo e il frontend
+  torna all'SVG.
+
+L'SVG **non entra mai nel documento**: il frontend usa il JPEG restituito accanto all'SVG e lo
+mostra in un `<img>` tramite object URL; l'SVG resta nella risposta per ispezione e non viene mai
+parsato. La regola "niente `innerHTML`, niente SVG nel DOM" resta vera.
 
 ### 6.8 `POST /api/design/flyer`
 
@@ -529,7 +545,9 @@ Il composer pubblico. Richiesta:
   come base della valutazione della ragione dopo la rimozione dei termini generici dell'artefatto
   (`flyer`, `poster`, `banner`, `design`, `layout`, `background`, `theme`, `branding`, ecc.).
 - Il colore è il primo nome della palette nel testo (o un HEX), altrimenti `blue`; il formato è
-  inferito da `poster`, `banner`, `social`, `background`, altrimenti `flyer`.
+  inferito da `banner`, `poster`, `instagram`/`social media`/`social post`, `background`/
+  `wallpaper`/`desktop`, altrimenti `flyer`. La parola “square” da sola non basta più: “Town Hall
+  Square” resta un flyer, mentre “square post” resta un `social_post`.
 - Esegue l'interaction (quindi profilo, preferenza, delay e messaggi) e poi genera gli sfondi con
   il limite dell'assistenza (`5`, `2` o `3`).
 - `undecidedAsPersonal` è attivo solo qui: una ragione che le regole non sanno decidere viene
@@ -543,6 +561,10 @@ Il composer pubblico. Richiesta:
 - La risposta contiene `input` (colore/hex/formato), `tone`, `profile`, `display.delay_ms`,
   `standingMessages`, `answer`, `stored`, `backgrounds` (`configured`, `provider`, `model`,
   `generated`, `fallback`, `notes`, `images`) e `composition`.
+- `backgrounds.images[]` non porta più il JPEG intero: `image` è `null` e `thumbnail` è un JPEG
+  largo 360 px per la striscia delle scelte. L'immagine intera resta nella cache del server e
+  viene ripresa per `id` da `/api/design/recompose`: così la risposta resta sotto il limite
+  Vercel (misurata: ~2,3 MB per un flyer 1080×1350 con 5 sfondi, contro ~5,0 MB di prima).
 - Gli sfondi sono immagini generate; se OpenRouter non è configurato o fallisce, `images[].fallback`
   è `true` e `images[].svg` contiene il gradiente deterministico.
 

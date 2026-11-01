@@ -5,8 +5,9 @@
  * backend composed. There is no palette, no rule panel and no local storage. The rules live in
  * the backend and are linked from GitHub.
  *
- * No innerHTML: every string from the API is inserted with textContent, and the composed SVG is
- * shown as an object URL in an <img>, never parsed into the document.
+ * No innerHTML: every string from the API is inserted with textContent, and the composed flyer is
+ * shown as an object URL in an <img>, never parsed into the document. The download is a JPEG:
+ * a phone gallery cannot open the SVG, so the backend also rasterises the composition.
  */
 
 const USER_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
@@ -129,6 +130,9 @@ function scrollToResult() {
 }
 
 function backgroundSource(background) {
+  if (typeof background?.thumbnail === 'string' && background.thumbnail.startsWith('data:image/')) {
+    return background.thumbnail;
+  }
   if (typeof background?.image === 'string' && background.image.startsWith('data:image/')) {
     return background.image;
   }
@@ -147,15 +151,34 @@ function chip(label, value) {
   );
 }
 
-function renderComposition(composition) {
+async function renderComposition(composition) {
+  let raster = typeof composition.image === 'string' && composition.image.startsWith('data:image/')
+    ? composition.image
+    : null;
+  let blob = null;
+  if (raster !== null) {
+    try {
+      blob = await (await fetch(raster)).blob();
+    } catch {
+      raster = null;
+    }
+  }
+  if (blob === null) {
+    blob = new Blob([composition.svg], { type: 'image/svg+xml' });
+  }
+
   if (state.objectUrl !== null) URL.revokeObjectURL(state.objectUrl);
-  state.objectUrl = URL.createObjectURL(new Blob([composition.svg], { type: 'image/svg+xml' }));
+  state.objectUrl = URL.createObjectURL(blob);
   dom.preview.src = state.objectUrl;
   dom.preview.alt = `Composed ${composition.design.label}: ${composition.copy.headline}`;
   dom.preview.hidden = false;
   dom.previewEmpty.hidden = true;
   dom.download.href = state.objectUrl;
-  dom.download.download = `chatmt-${composition.design.type}-${composition.colour.colour_name}.svg`;
+  dom.download.download =
+    raster === null
+      ? `chatmt-${composition.design.type}-${composition.colour.colour_name}.svg`
+      : `chatmt-${composition.design.type}-${composition.colour.colour_name}.jpg`;
+  dom.download.textContent = raster === null ? 'Download SVG' : 'Download JPG';
   dom.download.hidden = false;
 }
 
@@ -200,6 +223,11 @@ function renderNote(response) {
     parts.push(
       'Image generation is not configured: these are gradient fallbacks. Add OPENROUTER_API_KEY to the server environment and restart to generate the backgrounds.'
     );
+  }
+  if (typeof response.composition?.image === 'string' && response.composition.image.startsWith('data:image/')) {
+    parts.push('The download is a JPG image, so it opens in the phone gallery.');
+  } else if (response.composition?.image_error) {
+    parts.push('The JPG export failed, so the flyer is shown as an SVG instead.');
   }
   const storedAny = Object.values(response.stored ?? {}).some((value) => value !== null && value !== undefined);
   if (!storedAny) {
@@ -269,9 +297,9 @@ function renderSuggestions(response) {
   dom.suggestionList.replaceChildren(...images.map((background, index) => suggestionCard(background, index)));
 }
 
-function renderResult(response) {
+async function renderResult(response) {
   state.last = response;
-  renderComposition(response.composition);
+  await renderComposition(response.composition);
   dom.resultTitle.textContent = `Your ${response.composition.design.label}, composed.`;
   renderNote(response);
   renderMeta(response);
@@ -311,7 +339,7 @@ async function chooseBackground(index) {
       composition: response.composition,
       backgrounds: response.backgrounds
     };
-    renderComposition(response.composition);
+    await renderComposition(response.composition);
     selectSuggestion(index);
     dom.resultNote.textContent = `Background changed to ${background.label}. The flyer was recomposed; nothing was stored.`;
     scrollToResult();
@@ -378,7 +406,7 @@ async function createFlyer() {
       await sleep(delay);
     }
 
-    renderResult(response);
+    await renderResult(response);
     scrollToResult();
   } catch (error) {
     showStatus(error.message);

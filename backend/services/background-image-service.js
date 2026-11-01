@@ -169,6 +169,27 @@ async function mapLimit(items, limit, worker) {
   return results;
 }
 
+const THUMBNAIL_WIDTH = 360;
+
+/**
+ * The flyer response carries five suggestion thumbnails, not five full-size JPEGs: the full
+ * images stay in the cache and are fetched by id when the user chooses one. This keeps the
+ * JSON well below the serverless response limit.
+ */
+async function thumbnailFor(imageDataUrl) {
+  if (typeof imageDataUrl !== 'string' || !imageDataUrl.startsWith('data:image/')) return null;
+  const match = /^data:image\/[a-zA-Z0-9.+-]+;base64,(.*)$/s.exec(imageDataUrl);
+  if (match === null) return null;
+  try {
+    const image = await Jimp.read(Buffer.from(match[1], 'base64'));
+    if (image.bitmap.width > THUMBNAIL_WIDTH) image.resize({ w: THUMBNAIL_WIDTH });
+    const jpeg = await image.getBuffer('image/jpeg', { quality: 80 });
+    return `data:image/jpeg;base64,${jpeg.toString('base64')}`;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * @param {object} options
  * @param {object} options.generator the OpenRouter client
@@ -255,6 +276,7 @@ export function createBackgroundImageService({ generator, images, meanings, cach
       motif: motif.id,
       prompt: null,
       image: null,
+      thumbnail: null,
       svg: built.svg,
       css: built.css,
       width: design.width,
@@ -286,7 +308,14 @@ export function createBackgroundImageService({ generator, images, meanings, cach
     const results = await mapLimit(jobs, 2, async (job) => {
       const cached = await readCache(job.id);
       if (cached !== null) {
-        return { ...cached, label: job.motif.label, motif: job.motif.id, fallback: false };
+        let thumbnail = cached.thumbnail ?? null;
+        if (thumbnail === null && typeof cached.image === 'string') {
+          thumbnail = await thumbnailFor(cached.image);
+          if (thumbnail !== null) {
+            await writeCache({ ...cached, thumbnail });
+          }
+        }
+        return { ...cached, thumbnail, label: job.motif.label, motif: job.motif.id, fallback: false };
       }
       if (!generator.configured) {
         return fallbackFor({
@@ -309,6 +338,7 @@ export function createBackgroundImageService({ generator, images, meanings, cach
           motif: job.motif.id,
           prompt: job.prompt,
           image: prepared.image,
+          thumbnail: await thumbnailFor(prepared.image),
           width: prepared.width,
           height: prepared.height,
           bytes: prepared.bytes,

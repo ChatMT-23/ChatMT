@@ -56,6 +56,7 @@ function resolveColour(palette, colour) {
  * @param {(userId: string) => object} options.standingFor the profile of one user
  * @param {object} options.images the image service, for prepare()
  * @param {object|null} [options.cutouts] the cut-out service, for removeBackground()
+ * @param {object|null} [options.raster] the raster service, for the JPEG export
  */
 export function createComposeService({
   meaningStandard,
@@ -63,6 +64,7 @@ export function createComposeService({
   standingFor,
   images,
   cutouts = null,
+  raster = null,
   backgroundImages = null
 }) {
   if (!Array.isArray(palette) || palette.length === 0) throw new TypeError('The compose service needs the palette.');
@@ -116,6 +118,7 @@ export function createComposeService({
             id: background.id ?? null,
             label: background.label ?? null,
             fallback: background.fallback === true,
+            thumbnail: background.thumbnail ?? null,
             image:
               typeof background.image === 'string' && background.image.startsWith('data:image/')
                 ? background.image
@@ -167,16 +170,39 @@ export function createComposeService({
       variant
     });
 
+    let rasterImage = null;
+    let imageError = null;
+    if (raster !== null) {
+      try {
+        const rendered = await raster.render(result.svg);
+        rasterImage = {
+          data: rendered.image,
+          mime: rendered.mime,
+          width: rendered.width,
+          height: rendered.height,
+          bytes: rendered.bytes
+        };
+      } catch (error) {
+        imageError = error?.code ?? error?.message ?? 'raster_failed';
+      }
+    }
+
     return {
       ...result,
+      image: rasterImage?.data ?? null,
+      image_mime: rasterImage?.mime ?? null,
+      image_width: rasterImage?.width ?? null,
+      image_height: rasterImage?.height ?? null,
+      image_bytes: rasterImage?.bytes ?? null,
+      image_error: imageError,
       background:
         backgroundRecord === null
           ? null
           : {
               ...backgroundRecord,
-              // The composite is already inside the SVG; sending it again would double the
-              // response for no benefit.
-              image: backgroundRecord.composite === true ? null : backgroundRecord.image
+              // The background is already inside the SVG and the JPEG; sending it again would
+              // double the response for no benefit. The thumbnail stays for the interface.
+              image: null
             },
       photo:
         preparedPhoto === null

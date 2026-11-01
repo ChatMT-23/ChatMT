@@ -13,7 +13,7 @@
  *   node tests/browser-checks.mjs                        (starts its own server)
  *   node tests/browser-checks.mjs http://127.0.0.1:3080/frontend/studio.html?user=manual
  *
- * The first 51 checks use the detailed studio page; the last 11 use the public composer at
+ * The first 51 checks use the detailed studio page; the rest use the public composer at
  * /frontend/index.html with the same server and a new user.
  *
  * Set CHROME_PATH if Chrome is not in a usual location.
@@ -420,6 +420,15 @@ async function main() {
       'the simple page shows the reduced assistance'
     );
     assert((await hidden('#flyer-preview')) === false, 'the flyer preview is visible');
+    assert((await text('#download')).includes('JPG'), 'the download is offered as a JPG');
+    assert(
+      (await evaluate("document.querySelector('#download').download")).endsWith('.jpg'),
+      'the download filename is a JPG'
+    );
+    assert(
+      (await evaluate("document.querySelector('#flyer-preview').src")).startsWith('blob:'),
+      'the preview is a raster blob, not SVG markup'
+    );
     await waitForValue("document.querySelectorAll('#suggestion-list .suggestion-card').length", 2);
     assert(
       (await count('#suggestion-list .suggestion-card')) === 2,

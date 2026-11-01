@@ -1,8 +1,8 @@
 # ChatMT — Architettura (Fase 2 e backend)
 
 - **Stato:** implementata e verificata (114 test automatici + 62 controlli nel browser)
-- **Data:** 26 ottobre 2026 (fase 2), 28 ottobre 2026 (backend), 29 ottobre 2026 (regole nuove, interfaccia sulle API, redesign “Ink Register” e passata di correzione), 31 ottobre 2026 (composer semplice, sfondi generati, ritaglio del soggetto, Vercel)
-- **Ambito:** confronto di un colore scelto dalla tavolozza con i codici standard, memoria delle preferenze e delle correzioni, giudizio della ragione per rosso/giallo, profilo friendly/not_friendly con ritardo e displeasure ricorrente, suggerimenti grafici e sfondi generati, operazioni immagine, composer “Create your flyer” con rimozione dello sfondo della foto e compositing del soggetto, interfaccia servita dallo stesso server delle API e deploy Vercel static + serverless
+- **Data:** 26 ottobre 2026 (fase 2), 28 ottobre 2026 (backend), 29 ottobre 2026 (regole nuove, interfaccia sulle API, redesign “Ink Register” e passata di correzione), 31 ottobre 2026 (composer semplice, sfondi generati, ritaglio del soggetto, Vercel), 1 novembre 2026 (testo in tracciati, impaginazione misurata, export JPG)
+- **Ambito:** confronto di un colore scelto dalla tavolozza con i codici standard, memoria delle preferenze e delle correzioni, giudizio della ragione per rosso/giallo, profilo friendly/not_friendly con ritardo e displeasure ricorrente, suggerimenti grafici e sfondi generati, operazioni immagine, composer “Create your flyer” con rimozione dello sfondo della foto e compositing del soggetto, testo convertito in tracciati per un'impaginazione identica su telefono e server, export JPEG, interfaccia servita dallo stesso server delle API e deploy Vercel static + serverless
 
 > Il §1 descrive la fase 2, che resta valida per i moduli e non è stata riscritta. Il backend
 > aggiunge i pezzi del §8 e sostituisce la decisione "nessun backend" del §4, che valeva per
@@ -220,7 +220,8 @@ viene dichiarato dal server (`display.delay_ms`) e solo applicato dal browser.
 | `modules/design/subject-placement.js` | costanti e matematica della posizione del soggetto nello sfondo | `SUBJECT_BOX`, `subjectPlacement({width, height, subject})` |
 | `modules/design/raster-composer.js` | impasta il soggetto ritagliato nello sfondo e restituisce un solo JPEG | `compositeSubject({backgroundImage, subjectImage, width, height, subjectWidth, subjectHeight})`, `isRasterImageDataUrl` |
 | `backend/services/cutout-service.js` | rimuove lo sfondo della foto con GrabCut locale, cache e ripiego | `createCutoutService({cacheDir, workWidth})` → `removeBackground({image})`, `algorithm` |
-| `backend/services/compose-service.js` | prepara la foto, richiede il ritaglio e orchestra il compositing | `createComposeService({meaningStandard, palette, standingFor, images, cutouts})` → `compose`, `prepareImage`, `prepareCutout`, `meanings` |
+| `backend/services/raster-service.js` | converte l'SVG in JPEG con resvg e Jimp, senza dipendere dai font del server | `createRasterService({quality})` → `render(svg)` |
+| `backend/services/compose-service.js` | prepara la foto, richiede il ritaglio, orchestra compositing e rasterizzazione | `createComposeService({meaningStandard, palette, standingFor, images, cutouts, raster})` → `compose`, `prepareImage`, `prepareCutout`, `meanings` |
 | `backend/llm-classifier.js` | seconda fase per le ragioni ambigue | `createLlmClassifier({apiBase, apiKey, model, timeoutMs})` → `configured`, `classify` |
 | `backend/openrouter-images.js` | client image-to-image OpenRouter (`krea/k3-edit`) | `createOpenRouterImageClient({apiBase, apiKey, model, timeoutMs})` → `configured`, `generate({prompt, references})` |
 | `backend/services/background-image-service.js` | genera, prepara e cacha gli sfondi; fallback a gradienti | `createBackgroundImageService({generator, images, meanings, cacheDir})` → `generate`, `get`, `motifs` |
@@ -400,6 +401,24 @@ Scelte registrate:
   ritaglio sovrapposto. Se GrabCut non trova un soggetto separabile, il composer usa la vecchia
   cornice invece di produrre un ritaglio rotto. La cache del ritaglio è SHA-256 dell'immagine
   prepared + versione dell'algoritmo (`grabcut-v2`).
+- **Testo in tracciati, impaginazione misurata.** Il composer non scrive più `<text>`: carica i
+  TTF locali con `fontkit` e converte ogni riga in `<path>`. Le righe vengono misurate sui glifi
+  reali prima di andare a capo, quindi il testo non esce dal margine e non cambia larghezza se il
+  telefono non ha Georgia o Helvetica. Il blocco viene ridotto prima nel corpo e poi nel titolo;
+  in casi estremi il corpo viene accorciato con un'ellissi e il fatto è dichiarato in `warnings`.
+  `showcase` espone `text_top`, `text_bottom`, `rule_y`, `text_overflow` e `text_trimmed`.
+- **Export JPEG.** `@resvg/resvg-js` trasforma l'SVG in PNG e Jimp lo scrive in JPEG (qualità 92).
+  La pagina pubblica e lo studio mostrano e scaricano il JPEG: una galleria del telefono non apre
+  l'SVG. L'SVG resta nella risposta per ispezione e test; se la rasterizzazione fallisce,
+  `image_error` lo dichiara e il frontend torna all'SVG. Il costo misurato è ~1,1 s per flyer
+  1080×1350, con un JPEG di ~0,6–0,8 MB.
+- **Risposta leggera.** Le cinque immagini intere degli sfondi non viaggiano più nel JSON: la
+  risposta porta un `thumbnail` JPEG da 360 px per la striscia delle scelte, mentre l'immagine
+  intera resta nella cache e viene ripresa per `id` alla ricomposizione. La risposta di un flyer
+  1080×1350 con cinque sfondi è scesa da ~5,0 MB a ~2,3 MB, sotto il limite Vercel.
+- **Il formato non si deduce da una parola qualsiasi.** `square` da sola faceva diventare
+  `social_post` un flyer che citava “Town Hall Square”; ora servono `instagram`, `social media`,
+  `social post`, `social network` o `square format/post`. Il test `inferDesignType` copre il caso.
 - **Vercel.** `frontend/` è servito staticamente; `api/index.js` è l'handler serverless per ogni
   richiesta `/api/*`, raggiunto con il rewrite `/api/(.*) → /api/index`. Il catch-all
   `api/[...path].js` non è affidabile: su Vercel copre solo un livello e le rotte annidate
@@ -407,4 +426,6 @@ Scelte registrate:
   e volatili. Il Dockerfile resta per l'uso locale/container ed è escluso da `.vercelignore`.
   `@techstark/opencv-js` è una dipendenza npm caricata in modo lazy al primo ritaglio: il primo
   flyer con foto dopo un cold start paga il caricamento, i successivi no; anche la cache del
-  ritaglio vive in `/tmp` ed è per istanza.
+  ritaglio vive in `/tmp` ed è per istanza. `@resvg/resvg-js` porta un binario nativo per
+  linux-x64 che il build Vercel include; `fontkit` e i TTF locali viaggiano nel bundle della
+  funzione, quindi il testo in tracciati non richiede font di sistema.

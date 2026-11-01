@@ -1220,9 +1220,10 @@ async function sendChatMessage(raw) {
 // ---------------------------------------------------------------------------------------
 
 /**
- * One press, no manual work: the server places the photo, writes the text and returns an SVG.
- * The SVG is never parsed into the document — it becomes an object URL and travels into an
- * <img>, which is how the rule "no SVG markup in the page, no innerHTML" survives this feature.
+ * One press, no manual work: the server places the photo, writes the text and returns a JPG
+ * (with the SVG kept in the response for reference). The SVG is never parsed into the document:
+ * it becomes an object URL and travels into an <img>, which is how the rule "no SVG markup in
+ * the page, no innerHTML" survives this feature.
  */
 async function composeAutomatically() {
   if (state.selection === null) {
@@ -1242,7 +1243,7 @@ async function composeAutomatically() {
       }
     });
     clearStatus();
-    renderComposition(response);
+    await renderComposition(response);
   } catch (error) {
     showStatus(error.message);
     const hints =
@@ -1274,12 +1275,23 @@ function syncComposeButton() {
   if (!dom.composeRun) return;
   const ready = state.selection !== null;
   dom.composeRun.disabled = !ready;
-  dom.composeRun.title = ready ? 'The app places the photo, writes the text and returns an SVG.' : 'Choose a colour first';
+  dom.composeRun.title = ready ? 'The app places the photo, writes the text and returns a JPG.' : 'Choose a colour first';
 }
 
-function renderComposition(result) {
+async function renderComposition(result) {
+  let raster = typeof result.image === 'string' && result.image.startsWith('data:image/') ? result.image : null;
+  let blob = null;
+  if (raster !== null) {
+    try {
+      blob = await (await fetch(raster)).blob();
+    } catch {
+      raster = null;
+    }
+  }
+  if (blob === null) blob = new Blob([result.svg], { type: 'image/svg+xml' });
+
   if (state.composeUrl !== null) URL.revokeObjectURL(state.composeUrl);
-  state.composeUrl = URL.createObjectURL(new Blob([result.svg], { type: 'image/svg+xml' }));
+  state.composeUrl = URL.createObjectURL(blob);
 
   dom.composePreview.src = state.composeUrl;
   dom.composePreview.alt = `Composed ${result.design.label}: ${result.copy.headline}`;
@@ -1287,13 +1299,14 @@ function renderComposition(result) {
   if (dom.composeEmpty) dom.composeEmpty.hidden = true;
   if (dom.composeDownload) {
     dom.composeDownload.href = state.composeUrl;
-    dom.composeDownload.download = `chatmt-${result.design.type}-${result.colour.colour_name}.svg`;
+    dom.composeDownload.download = `chatmt-${result.design.type}-${result.colour.colour_name}.${raster === null ? 'svg' : 'jpg'}`;
+    dom.composeDownload.textContent = raster === null ? 'Download SVG' : 'Download JPG';
     dom.composeDownload.hidden = false;
   }
   if (dom.composeStatus) {
-    dom.composeStatus.textContent =
-      `Composed ${result.design.width}×${result.design.height} · ${result.svg_bytes} bytes · ` +
-      `${result.svg.split('\n').length > 1 ? 'multi-line' : 'single-line'} SVG.`;
+    dom.composeStatus.textContent = raster === null
+      ? `Composed ${result.design.width}×${result.design.height} · ${result.svg_bytes} bytes · SVG.`
+      : `Composed ${result.design.width}×${result.design.height} · ${Math.round(result.image_bytes / 1024)} KB · JPG.`;
   }
   if (dom.composeCaption) {
     dom.composeCaption.textContent =

@@ -77,6 +77,7 @@ test('the background service generates, prepares and caches one image per motif'
   assert.equal(first.fallback, 0);
   assert.equal(first.configured, true);
   assert.match(first.images[0].image, /^data:image\/jpeg;base64,/);
+  assert.match(first.images[0].thumbnail, /^data:image\/jpeg;base64,/);
   assert.match(first.images[0].prompt, /green \(#008000\)/);
   assert.match(first.images[0].prompt, /no text/i);
   assert.equal(first.images[0].motif, 'botanical');
@@ -92,9 +93,12 @@ test('the background service generates, prepares and caches one image per motif'
   });
   assert.equal(generator.calls(), callsAfterFirst, 'the cache avoids a second generation');
   assert.equal(second.images[0].id, first.images[0].id);
+  assert.equal(second.images[0].thumbnail, first.images[0].thumbnail);
+  assert.match(second.images[0].thumbnail, /^data:image\/jpeg;base64,/);
 
   const cached = await service.get(first.images[0].id);
   assert.equal(cached.image, first.images[0].image);
+  assert.equal(cached.thumbnail, first.images[0].thumbnail);
 
   fs.rmSync(cacheDir, { recursive: true, force: true });
 });

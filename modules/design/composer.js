@@ -19,9 +19,32 @@
  * document, no innerHTML" still holds.
  */
 
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import * as fontkit from 'fontkit';
+
 import { normaliseDesignContext } from '../policy/design-suggestions.js';
 
 const XML_ESCAPES = Object.freeze({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' });
+
+const FONT_DIRECTORY = fileURLToPath(new URL('../../frontend/fonts/', import.meta.url));
+
+function loadTypeface(fileName) {
+  return fontkit.openSync(path.join(FONT_DIRECTORY, fileName));
+}
+
+/**
+ * The flyer carries its own glyph outlines. Nothing depends on the fonts installed on the phone
+ * or on the service that turns the SVG into a JPEG: the same curves are used everywhere.
+ */
+const TYPEFACES = Object.freeze({
+  display: loadTypeface('Gloock-Regular.ttf'),
+  body: loadTypeface('InstrumentSans-Regular.ttf'),
+  bodyBold: loadTypeface('InstrumentSans-Bold.ttf'),
+  mono: loadTypeface('GeistMono-Regular.ttf'),
+  monoBold: loadTypeface('GeistMono-Bold.ttf')
+});
 
 function xml(value) {
   return String(value).replace(/[&<>"']/g, (character) => XML_ESCAPES[character]);
@@ -76,29 +99,62 @@ function inkFor(hex) {
   return relativeLuminance(hex) > 0.42 ? '#14120e' : '#fbf8f1';
 }
 
-/** Word wrapping with a declared character budget, so the text never leaves the safe margin. */
-function wrap(text, maxCharacters) {
+/** Width of a line in the same units resvg and the browser will draw. */
+function textWidth(text, typeface, size, spacing = 0) {
+  const value = String(text);
+  const scale = size / typeface.unitsPerEm;
+  const tracking = spacing === 0 ? 0 : spacing * Math.max(0, value.length - 1);
+  return typeface.layout(value).advanceWidth * scale + tracking;
+}
+
+/** Word wrapping measured on the real glyphs, with a hard break for a word wider than the column. */
+function wrapToWidth(text, typeface, size, maxWidth, spacing = 0) {
   const words = String(text).split(/\s+/).filter(Boolean);
   const lines = [];
   let line = '';
+  const fits = (value) => textWidth(value, typeface, size, spacing) <= maxWidth;
+
   for (const word of words) {
     const candidate = line === '' ? word : `${line} ${word}`;
-    if (candidate.length > maxCharacters && line !== '') {
-      lines.push(line);
-      line = word;
-    } else {
+    if (fits(candidate)) {
       line = candidate;
+      continue;
     }
+    if (line !== '') {
+      lines.push(line);
+      line = '';
+    }
+    if (fits(word)) {
+      line = word;
+      continue;
+    }
+    let chunk = '';
+    for (const character of word) {
+      if (fits(chunk + character)) {
+        chunk += character;
+      } else {
+        if (chunk !== '') lines.push(chunk);
+        chunk = character;
+      }
+    }
+    line = chunk;
   }
+
   if (line !== '') lines.push(line);
-  return lines;
+  return lines.length === 0 ? [''] : lines;
 }
 
 const FONTS = Object.freeze({
-  display: '"Georgia", "Times New Roman", serif',
-  body: '"Helvetica Neue", Arial, sans-serif',
-  mono: '"Courier New", monospace'
+  display: 'display',
+  body: 'body',
+  mono: 'mono'
 });
+
+function typefaceFor(font, weight) {
+  if (font === FONTS.display) return TYPEFACES.display;
+  if (font === FONTS.mono) return weight >= 600 ? TYPEFACES.monoBold : TYPEFACES.mono;
+  return weight >= 600 ? TYPEFACES.bodyBold : TYPEFACES.body;
+}
 
 export const COMPOSITION_LAYOUTS = Object.freeze({
   showcase: {
@@ -169,11 +225,13 @@ function buildCopy({ colourName, entry, context }) {
   };
 }
 
-function svgDocument({ width, height, content, title }) {
+function svgDocument({ width, height, content, title, description = '' }) {
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" ` +
     `viewBox="0 0 ${width} ${height}" role="img">` +
-    `<title>${xml(title)}</title>${content}</svg>`
+    `<title>${xml(title)}</title>` +
+    (description === '' ? '' : `<desc>${xml(description)}</desc>`) +
+    `${content}</svg>`
   );
 }
 
@@ -210,13 +268,40 @@ function scrimLayer({ x, y, width, height, colour, direction = 'vertical', id, s
   );
 }
 
+function textPath({ text, x, y, size, fill, typeface, spacing = 0 }) {
+  const value = String(text);
+  if (value === '') return '';
+  const scale = size / typeface.unitsPerEm;
+  const run = typeface.layout(value);
+  let cursor = x;
+  let data = '';
+  for (let index = 0; index < run.glyphs.length; index++) {
+    const glyph = run.glyphs[index];
+    const position = run.positions[index];
+    if (glyph.path.commands.length > 0) {
+      data += glyph.path
+        .scale(scale, -scale)
+        .translate(cursor + (position.xOffset ?? 0) * scale, y + (position.yOffset ?? 0) * scale)
+        .toSVG();
+    }
+    cursor += position.xAdvance * scale + spacing;
+  }
+  return data === '' ? '' : `<path d="${data}" fill="${fill}"/>`;
+}
+
 function textLines({ lines, x, y, lineHeight, size, fill, font, weight = 400, spacing = 0 }) {
+  const typeface = typefaceFor(font, weight);
   return lines
-    .map(
-      (line, index) =>
-        `<text x="${x}" y="${round(y + index * lineHeight)}" font-family='${font}' font-size="${size}" ` +
-        `font-weight="${weight}" fill="${fill}"${spacing === 0 ? '' : ` letter-spacing="${spacing}"`}>` +
-        `${xml(line)}</text>`
+    .map((line, index) =>
+      textPath({
+        text: line,
+        x,
+        y: y + index * lineHeight,
+        size,
+        fill,
+        typeface,
+        spacing
+      })
     )
     .join('');
 }
@@ -276,6 +361,7 @@ export function composeDesign({
   const kickerSize = Math.max(11, round(bodySize * 0.72));
   const footerSize = kickerSize;
   const actions = [];
+  const layoutMetrics = {};
 
   const parts = [];
 
@@ -298,10 +384,11 @@ export function composeDesign({
         stops: hasSubject
           ? [
               { offset: 0, opacity: 0 },
-              { offset: 0.2, opacity: 0.25 },
-              { offset: 0.4, opacity: 0.7 },
-              { offset: 0.55, opacity: 0.92 },
-              { offset: 1, opacity: 0.96 }
+              { offset: 0.12, opacity: 0.18 },
+              { offset: 0.25, opacity: 0.55 },
+              { offset: 0.4, opacity: 0.82 },
+              { offset: 0.55, opacity: 0.94 },
+              { offset: 1, opacity: 0.97 }
             ]
           : null
       })
@@ -338,8 +425,9 @@ export function composeDesign({
     const footerSize = kickerSize;
     const ruleY = height - margin * 1.45;
     const available = ruleY - textTop;
-    let headlineLines = wrap(copy.headline, Math.max(12, Math.floor(columnWidth / (headlineSize * 0.52))));
-    let bodyLines = wrap(copy.body, Math.max(20, Math.floor(columnWidth / (bodySize * 0.52))));
+    let headlineLines = wrapToWidth(copy.headline, TYPEFACES.display, headlineSize, columnWidth);
+    let bodyLines = wrapToWidth(copy.body, TYPEFACES.body, bodySize, columnWidth);
+    let textTrimmed = false;
 
     const blockHeight = () =>
       kickerSize * 2.1 +
@@ -352,9 +440,31 @@ export function composeDesign({
     while (headlineSize > 36 && blockHeight() > available) {
       headlineSize -= 2;
       bodySize = Math.max(13, round(headlineSize * 0.36));
-      headlineLines = wrap(copy.headline, Math.max(12, Math.floor(columnWidth / (headlineSize * 0.52))));
-      bodyLines = wrap(copy.body, Math.max(20, Math.floor(columnWidth / (bodySize * 0.52))));
+      headlineLines = wrapToWidth(copy.headline, TYPEFACES.display, headlineSize, columnWidth);
+      bodyLines = wrapToWidth(copy.body, TYPEFACES.body, bodySize, columnWidth);
     }
+    while (bodySize > 11 && blockHeight() > available) {
+      bodySize -= 1;
+      bodyLines = wrapToWidth(copy.body, TYPEFACES.body, bodySize, columnWidth);
+    }
+    while (bodyLines.length > 1 && blockHeight() > available) {
+      bodyLines.pop();
+      textTrimmed = true;
+    }
+    if (textTrimmed) {
+      bodyLines[bodyLines.length - 1] = `${bodyLines[bodyLines.length - 1].replace(/[.,;:]$/, '')}\u2026`;
+    }
+
+    const bodyLineHeight = round(bodySize * 1.45);
+    const headlineTop = textTop + kickerSize * 2.1 + headlineSize;
+    const afterHeadline = headlineTop + (headlineLines.length - 1) * headlineSize * 1.06;
+    const bodyTop = afterHeadline + bodySize * 1.8;
+    const textBottom = bodyTop + Math.max(0, bodyLines.length - 1) * bodyLineHeight + bodySize * 0.25;
+    layoutMetrics.text_top = textTop;
+    layoutMetrics.text_bottom = round(textBottom);
+    layoutMetrics.rule_y = round(ruleY);
+    layoutMetrics.text_overflow = textBottom > ruleY - 2;
+    layoutMetrics.text_trimmed = textTrimmed;
 
     parts.push(
       textLines({
@@ -368,7 +478,6 @@ export function composeDesign({
         spacing: 2
       })
     );
-    const headlineTop = textTop + kickerSize * 2.1 + headlineSize;
     parts.push(
       textLines({
         lines: headlineLines,
@@ -380,14 +489,12 @@ export function composeDesign({
         font: FONTS.display
       })
     );
-    const afterHeadline = headlineTop + (headlineLines.length - 1) * headlineSize * 1.06;
-    const bodyTop = afterHeadline + bodySize * 1.8;
     parts.push(
       textLines({
         lines: bodyLines,
         x: margin,
         y: bodyTop,
-        lineHeight: round(bodySize * 1.45),
+        lineHeight: bodyLineHeight,
         size: bodySize,
         fill: ink,
         font: FONTS.body
@@ -428,8 +535,8 @@ export function composeDesign({
     const contentTop = photoHeight + margin;
     const columnWidth = width - margin * 2;
     const subtitle = copy.subhead === null ? [] : [copy.subhead];
-    const headlineLines = wrap(copy.headline, Math.max(12, Math.floor(columnWidth / (headlineSize * 0.5))));
-    const bodyLines = wrap(copy.body, Math.max(20, Math.floor(columnWidth / (bodySize * 0.5))));
+    const headlineLines = wrapToWidth(copy.headline, TYPEFACES.display, headlineSize, columnWidth);
+    const bodyLines = wrapToWidth(copy.body, TYPEFACES.body, bodySize, columnWidth);
 
     parts.push(`<rect width="${width}" height="${height}" fill="${entry.hex}"/>`);
     parts.push(
@@ -510,8 +617,8 @@ export function composeDesign({
     const bandWidth = round(width * 0.56);
     const photoX = bandWidth;
     const columnWidth = bandWidth - margin * 2;
-    const headlineLines = wrap(copy.headline, Math.max(10, Math.floor(columnWidth / (headlineSize * 0.5))));
-    const bodyLines = wrap(copy.body, Math.max(18, Math.floor(columnWidth / (bodySize * 0.5))));
+    const headlineLines = wrapToWidth(copy.headline, TYPEFACES.display, headlineSize, columnWidth);
+    const bodyLines = wrapToWidth(copy.body, TYPEFACES.body, bodySize, columnWidth);
     const subtitle = copy.subhead === null ? [] : [copy.subhead];
 
     parts.push(`<rect width="${width}" height="${height}" fill="${entry.hex}"/>`);
@@ -591,8 +698,35 @@ export function composeDesign({
   } else {
     const textTop = round(height * 0.6);
     const columnWidth = width - margin * 2;
-    const headlineLines = wrap(copy.headline, Math.max(12, Math.floor(columnWidth / (headlineSize * 0.5))));
-    const bodyLines = wrap(copy.body, Math.max(20, Math.floor(columnWidth / (bodySize * 0.5))));
+    let headlineLines = wrapToWidth(copy.headline, TYPEFACES.display, headlineSize, columnWidth);
+    let bodyLines = wrapToWidth(copy.body, TYPEFACES.body, bodySize, columnWidth);
+    const headlineLineHeight = (size) => round(size * 1.08);
+    const bodyLineHeight = (size) => round(size * 1.5);
+
+    const fits = () => {
+      const top = textTop + kickerSize * 2 + headlineSize;
+      const headlineBottom = top + (headlineLines.length - 1) * headlineLineHeight(headlineSize);
+      const bodyTop = height - margin - (bodyLines.length - 1) * bodyLineHeight(bodySize);
+      return bodyTop - headlineBottom >= bodySize * 1.2;
+    };
+
+    while (bodySize > 11 && !fits()) {
+      bodySize -= 1;
+      bodyLines = wrapToWidth(copy.body, TYPEFACES.body, bodySize, columnWidth);
+    }
+    while (headlineSize > 30 && !fits()) {
+      headlineSize -= 2;
+      bodySize = Math.max(11, round(headlineSize * 0.36));
+      headlineLines = wrapToWidth(copy.headline, TYPEFACES.display, headlineSize, columnWidth);
+      bodyLines = wrapToWidth(copy.body, TYPEFACES.body, bodySize, columnWidth);
+    }
+
+    const headlineTop = textTop + kickerSize * 2 + headlineSize;
+    const bodyTop = height - margin - (bodyLines.length - 1) * bodyLineHeight(bodySize);
+    layoutMetrics.text_top = textTop;
+    layoutMetrics.text_bottom = round(bodyTop + bodySize * 0.25);
+    layoutMetrics.rule_y = round(height - margin);
+    layoutMetrics.text_overflow = !fits();
 
     parts.push(`<rect width="${width}" height="${height}" fill="${entry.hex}"/>`);
     parts.push(
@@ -617,8 +751,8 @@ export function composeDesign({
       textLines({
         lines: headlineLines,
         x: margin,
-        y: textTop + kickerSize * 2 + headlineSize,
-        lineHeight: round(headlineSize * 1.08),
+        y: headlineTop,
+        lineHeight: headlineLineHeight(headlineSize),
         size: headlineSize,
         fill: ink,
         font: FONTS.display
@@ -628,8 +762,8 @@ export function composeDesign({
       textLines({
         lines: bodyLines,
         x: margin,
-        y: height - margin,
-        lineHeight: round(bodySize * 1.5),
+        y: bodyTop,
+        lineHeight: bodyLineHeight(bodySize),
         size: bodySize,
         fill: ink,
         font: FONTS.body
@@ -648,11 +782,18 @@ export function composeDesign({
   const svg = svgDocument({
     width,
     height,
-    title: `${copy.headline} — ${context.label}`,
+    title: `${copy.headline} \u2014 ${context.label}`,
+    description: [copy.kicker, copy.headline, copy.subhead, copy.body, copy.footer].filter(Boolean).join(' \u2014 '),
     content: parts.join('')
   });
 
   const warnings = [];
+  if (layoutMetrics.text_trimmed === true) {
+    warnings.push('The text was longer than the flyer could hold at a readable size; the body was shortened with an ellipsis.');
+  }
+  if (layoutMetrics.text_overflow === true) {
+    warnings.push('The text block is taller than its declared area; reduce the text or choose a taller format.');
+  }
   if (photo === null && !hasBackground) {
     warnings.push('No photo or generated background was available: the frame uses a colour field instead.');
   }
@@ -690,7 +831,8 @@ export function composeDesign({
       label: COMPOSITION_LAYOUTS[layoutId].label,
       for: COMPOSITION_LAYOUTS[layoutId].for,
       margin,
-      variant: Number.isInteger(variant) ? variant : 0
+      variant: Number.isInteger(variant) ? variant : 0,
+      ...layoutMetrics
     },
     copy,
     photo:

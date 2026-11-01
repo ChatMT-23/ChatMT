@@ -20,6 +20,7 @@ import { loadStandards } from '../backend/standards-loader.js';
 import { createInteractionService } from '../backend/services/interaction-service.js';
 import { createComposeService } from '../backend/services/compose-service.js';
 import { createCutoutService } from '../backend/services/cutout-service.js';
+import { inferDesignType } from '../backend/services/flyer-service.js';
 import { createLlmClassifier, LlmError } from '../backend/llm-classifier.js';
 import { loadEnvFile, parseEnvFile } from '../backend/env-file.js';
 import { MemoryStore, createVolatileAdapter } from '../modules/memory/memory-store.js';
@@ -1185,6 +1186,54 @@ test('only red and yellow produce a question; every other colour stays question-
       `${entry.name}: reasonAssessment should be ${questioned ? 'present' : 'absent'}`
     );
   }
+});
+
+test('a place called Square does not turn a flyer into a social post', () => {
+  assert.equal(inferDesignType('Community market in Town Hall Square'), 'flyer');
+  assert.equal(inferDesignType('Saturday at the square'), 'flyer');
+  assert.equal(inferDesignType('A square post for Instagram'), 'social_post');
+  assert.equal(inferDesignType('A poster for the market'), 'poster');
+  assert.equal(inferDesignType('A banner for the road'), 'banner');
+});
+
+test('the composition comes back as a phone-ready JPEG as well as an SVG', async () => {
+  const composed = await api('/api/design/compose', {
+    method: 'POST',
+    body: {
+      userId: 'raster-user',
+      colour: { name: 'blue' },
+      design: { type: 'flyer', subject: 'Jazz night' }
+    }
+  });
+  assert.equal(composed.status, 200);
+  assert.match(composed.body.image, /^data:image\/jpeg;base64,/);
+  assert.equal(composed.body.image_mime, 'image/jpeg');
+  assert.equal(composed.body.image_width, 1080);
+  assert.equal(composed.body.image_height, 1350);
+  assert.ok(composed.body.image_bytes > 10000);
+  assert.equal(composed.body.image_error, null);
+  assert.doesNotMatch(composed.body.svg, /<text /, 'the SVG carries glyph outlines, not live text');
+  assert.match(composed.body.svg, /<path d="/);
+  assert.match(composed.body.svg, /<desc>/);
+});
+
+test('a long flyer keeps the text above the footer and the export is still complete', async () => {
+  const longBody =
+    'Saturday 14 November, 10:00-18:00, Town Hall Square. Local farmers, artisans, hot food, live music, children workshop, raffle at 17:00. Free entry. Bring your family and friends; all proceeds support the neighbourhood library. The event is organised by the Friends of the Library together with the town council. Stalls include bread, cheese, honey, preserves, ceramics, knitted goods, second-hand books, plants and seasonal flowers. Live music from the town band at 11:00 and 15:00, a storytelling corner for children at 12:00, and a cooking demonstration at 14:00. Raffle tickets are available at the information desk; the draw takes place at 17:00. All proceeds support the neighbourhood library and its reading programmes for children and older residents.';
+  const text = `Community Autumn Market and Neighbourhood Festival\n${longBody}`.slice(0, 800);
+  const response = await api('/api/design/flyer', {
+    method: 'POST',
+    body: { userId: 'long-layout-user', text, consent: true }
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.design.type, 'flyer');
+  const layout = response.body.composition.layout;
+  assert.equal(layout.text_overflow, false);
+  assert.equal(layout.text_trimmed, false);
+  assert.ok(layout.text_bottom < layout.rule_y);
+  assert.match(response.body.composition.image, /^data:image\/jpeg;base64,/);
+  assert.equal(response.body.composition.image_width, 1080);
+  assert.equal(response.body.composition.image_height, 1350);
 });
 
 async function portraitPhotoDataUrl() {

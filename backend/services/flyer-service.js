@@ -27,7 +27,7 @@ const COLOUR_ALIASES = Object.freeze({
 const DESIGN_PATTERNS = Object.freeze([
   ['banner', /\bbanner\b/i],
   ['poster', /\bposter\b/i],
-  ['social_post', /\b(?:instagram|social|square)\b/i],
+  ['social_post', /\b(?:instagram|social media|social post|social network|square (?:format|post))\b/i],
   ['background', /\b(?:background|wallpaper|desktop)\b/i]
 ]);
 
@@ -153,6 +153,19 @@ export function createFlyerService({ interactionService, composeService, backgro
     });
   }
 
+  /**
+   * The suggestion strip needs thumbnails, not five full-size JPEGs: the full images stay in
+   * the server cache and are fetched by id when the user chooses one. Sending them all would
+   * push the JSON response over the serverless limit.
+   */
+  function clientBackgrounds(backgrounds) {
+    if (!backgrounds || !Array.isArray(backgrounds.images)) return backgrounds;
+    return {
+      ...backgrounds,
+      images: backgrounds.images.map((background) => ({ ...background, image: null }))
+    };
+  }
+
   async function create({ userId, text, image = null, consent = false, design = {} } = {}) {
     const cleanText = validateText(text);
     const colour = inferColour(cleanText, palette);
@@ -209,7 +222,7 @@ export function createFlyerService({ interactionService, composeService, backgro
       reasonAssessment: interaction.reasonAssessment,
       answer: interaction.answer,
       stored: interaction.stored,
-      backgrounds,
+      backgrounds: clientBackgrounds(backgrounds),
       composition,
       suggestions: interaction.designSuggestions
     };
@@ -272,7 +285,7 @@ export function createFlyerService({ interactionService, composeService, backgro
       text: cleanText,
       input: { colourName: entry.name, hex: entry.hex },
       design: context,
-      backgrounds,
+      backgrounds: clientBackgrounds(backgrounds),
       composition
     };
   }

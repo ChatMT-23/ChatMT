@@ -9,9 +9,9 @@
  */
 
 export const SUBJECT_BOX = Object.freeze({
-  maxWidthRatio: 0.64,
-  maxHeightRatio: 0.54,
-  bottomRatio: 0.6,
+  maxWidthRatio: 0.62,
+  maxHeightRatio: 0.5,
+  bottomRatio: 0.57,
   fadeRatio: 0.18
 });
 
