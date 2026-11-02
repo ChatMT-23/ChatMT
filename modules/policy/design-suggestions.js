@@ -139,6 +139,12 @@ const BACKGROUND_STYLES = Object.freeze([
 
 export { BACKGROUND_STYLES };
 
+/**
+ * The user's choice of writing size. It scales the copy and the two optional lines; the
+ * composer still fits everything inside the flyer and may reduce it when the text is long.
+ */
+export const TEXT_SCALE = Object.freeze({ min: 0.8, max: 1.3, default: 1 });
+
 function optionalText(value, field, maximum = 200) {
   if (value === undefined || value === null) return null;
   if (typeof value !== 'string') throw new TypeError(`design.${field} must be a string when present.`);
@@ -149,8 +155,22 @@ function optionalText(value, field, maximum = 200) {
   return trimmed === '' ? null : trimmed;
 }
 
+function optionalScale(value) {
+  if (value === undefined || value === null || value === '') return TEXT_SCALE.default;
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    throw new TypeError('design.textScale must be a number when present.');
+  }
+  if (number < TEXT_SCALE.min || number > TEXT_SCALE.max) {
+    throw new RangeError(
+      `design.textScale must be between ${TEXT_SCALE.min} and ${TEXT_SCALE.max}.`
+    );
+  }
+  return Math.round(number * 100) / 100;
+}
+
 /**
- * @param {{type?: string, subject?: string, audience?: string, text?: string, topText?: string, bottomText?: string}} [design]
+ * @param {{type?: string, subject?: string, audience?: string, text?: string, topText?: string, bottomText?: string, textScale?: number}} [design]
  */
 export function normaliseDesignContext(design = {}) {
   const type = String(design?.type ?? 'flyer').trim().toLowerCase();
@@ -168,7 +188,8 @@ export function normaliseDesignContext(design = {}) {
     audience: optionalText(design?.audience, 'audience'),
     text: optionalText(design?.text, 'text', 800),
     topText: optionalText(design?.topText, 'topText'),
-    bottomText: optionalText(design?.bottomText, 'bottomText')
+    bottomText: optionalText(design?.bottomText, 'bottomText'),
+    textScale: optionalScale(design?.textScale)
   });
 }
 

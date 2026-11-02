@@ -232,10 +232,13 @@ test('every design type is accepted and keeps its own size', () => {
   }
 });
 
-test('an unknown design type or an over-long subject is refused', () => {
+test('an unknown design type, an over-long subject or an invalid text size is refused', () => {
   assert.throws(() => normaliseDesignContext({ type: 't-shirt' }), RangeError);
   assert.throws(() => normaliseDesignContext({ type: 'flyer', subject: 'x'.repeat(201) }), RangeError);
   assert.throws(() => normaliseDesignContext({ type: 'flyer', subject: 42 }), TypeError);
+  assert.throws(() => normaliseDesignContext({ type: 'flyer', textScale: 2 }), RangeError);
+  assert.throws(() => normaliseDesignContext({ type: 'flyer', textScale: 'big' }), TypeError);
+  assert.equal(normaliseDesignContext({ type: 'flyer' }).textScale, 1);
 });
 
 test('image operations: a valid crop and resize are accepted', () => {
@@ -445,6 +448,37 @@ test('the optional lines fit the square layout above the bottom edge', () => {
   assert.ok(result.layout.text_bottom < result.layout.bottom_note_top);
   assert.match(result.svg, /New season/);
   assert.match(result.svg, /Doors 8pm/);
+});
+
+test('the user can choose a smaller or larger writing size', () => {
+  const backgroundImage = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
+  const base = composeDesign({
+    meanings,
+    colourName: 'blue',
+    design: { type: 'flyer', text: 'Jazz night\nDoors 8pm' },
+    backgroundImage
+  });
+  const large = composeDesign({
+    meanings,
+    colourName: 'blue',
+    design: { type: 'flyer', text: 'Jazz night\nDoors 8pm', textScale: 1.25 },
+    backgroundImage
+  });
+  const small = composeDesign({
+    meanings,
+    colourName: 'blue',
+    design: { type: 'flyer', text: 'Jazz night\nDoors 8pm', textScale: 0.85 },
+    backgroundImage
+  });
+
+  assert.equal(base.layout.text_scale, 1);
+  assert.equal(large.layout.text_scale, 1.25);
+  assert.ok(large.layout.headline_size > base.layout.headline_size);
+  assert.ok(small.layout.headline_size < base.layout.headline_size);
+  assert.ok(large.layout.body_size > small.layout.body_size);
+  assert.equal(large.layout.text_overflow, false);
+  assert.equal(small.layout.text_overflow, false);
+  assert.ok(large.actions.some((line) => /125%/.test(line)));
 });
 
 test('red and yellow compose without a recorded cogent reason, with the reduced assistance', () => {

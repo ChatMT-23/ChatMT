@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 
 import * as fontkit from 'fontkit';
 
-import { normaliseDesignContext } from '../policy/design-suggestions.js';
+import { normaliseDesignContext, TEXT_SCALE } from '../policy/design-suggestions.js';
 
 const XML_ESCAPES = Object.freeze({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' });
 
@@ -404,13 +404,16 @@ export function composeDesign({
   const layoutId = layoutFor(width, height, hasBackground);
   const ink = inkFor(entry.hex);
   const copy = buildCopy({ colourName: requested, entry, context });
+  const textScale = context.textScale ?? TEXT_SCALE.default;
   const margin = round(Math.min(width, height) * 0.07);
-  const headlineSize = Math.max(30, Math.min(96, round(Math.min(width, height) * 0.078)));
-  const bodySize = Math.max(15, Math.min(30, round(headlineSize * 0.4)));
+  const baseHeadlineSize = Math.max(30, Math.min(96, round(Math.min(width, height) * 0.078)));
+  const headlineSize = Math.max(30, Math.min(140, round(baseHeadlineSize * textScale)));
+  const bodyMax = Math.round(30 * textScale);
+  const bodySize = Math.max(15, Math.min(bodyMax, round(headlineSize * 0.4)));
   const kickerSize = Math.max(11, round(bodySize * 0.72));
   const footerSize = kickerSize;
   const actions = [];
-  const layoutMetrics = {};
+  const layoutMetrics = { text_scale: textScale };
 
   const parts = [];
 
@@ -456,8 +459,17 @@ export function composeDesign({
           : copy.headline.length + copy.body.length > 150
             ? 0.84
             : 1;
-    let headlineSize = Math.max(34, round(Math.min(96, Math.min(width, height) * 0.085) * density));
-    let bodySize = Math.max(15, round(Math.min(30, headlineSize * 0.36)));
+    const normalHeadlineSize = Math.max(
+      34,
+      round(Math.min(96, Math.min(width, height) * 0.085) * density)
+    );
+    const normalBodySize = Math.max(15, Math.min(30, round(normalHeadlineSize * 0.36)));
+    let headlineSize = Math.max(
+      34,
+      Math.min(140, round(Math.min(96, Math.min(width, height) * 0.085) * density * textScale))
+    );
+    let bodySize = Math.max(15, Math.min(Math.round(30 * textScale), round(headlineSize * 0.36)));
+    if (textScale > 1) bodySize = Math.min(normalBodySize, bodySize);
     const kickerSize = Math.max(11, round(bodySize * 0.72));
     const footerSize = kickerSize;
     const noteSize = Math.max(12, round(kickerSize * 1.05));
@@ -488,9 +500,13 @@ export function composeDesign({
       (bodyLines.length - 1) * bodySize * 1.45 +
       bodySize * 0.4;
 
-    while (headlineSize > 36 && blockHeight() > available) {
+    const headlineFloor = textScale > 1 ? normalHeadlineSize : 36;
+    while (headlineSize > headlineFloor && blockHeight() > available) {
       headlineSize -= 2;
-      bodySize = Math.max(13, round(headlineSize * 0.36));
+      bodySize =
+        textScale > 1
+          ? Math.max(13, Math.min(normalBodySize, round(headlineSize * 0.36)))
+          : Math.max(13, round(headlineSize * 0.36));
       headlineLines = wrapToWidth(copy.headline, TYPEFACES.display, headlineSize, columnWidth);
       bodyLines = wrapToWidth(copy.body, TYPEFACES.body, bodySize, columnWidth);
     }
@@ -516,6 +532,8 @@ export function composeDesign({
     layoutMetrics.rule_y = round(ruleY);
     layoutMetrics.text_overflow = textBottom > textLimit - 2;
     layoutMetrics.text_trimmed = textTrimmed;
+    layoutMetrics.headline_size = headlineSize;
+    layoutMetrics.body_size = bodySize;
     if (topNote !== null) {
       layoutMetrics.top_note_top = margin;
       layoutMetrics.top_note_bottom = round(margin + topNote.height);
@@ -663,7 +681,7 @@ export function composeDesign({
       stackBodySize * 0.25;
     let textTrimmed = false;
 
-    if (bottomNote !== null) {
+    if (bottomNote !== null || textScale !== 1) {
       while (stackBodySize > 11 && bodyBottom() > textLimit) {
         stackBodySize -= 1;
         bodyLines = wrapToWidth(copy.body, TYPEFACES.body, stackBodySize, columnWidth);
@@ -748,12 +766,14 @@ export function composeDesign({
           fill: ink
         })
       );
-      layoutMetrics.text_top = contentTop;
-      layoutMetrics.text_bottom = round(bodyBottom());
-      layoutMetrics.rule_y = round(footerRuleY);
-      layoutMetrics.text_overflow = bodyBottom() > textLimit - 2;
-      layoutMetrics.text_trimmed = textTrimmed;
     }
+    layoutMetrics.text_top = contentTop;
+    layoutMetrics.text_bottom = round(bodyBottom());
+    layoutMetrics.rule_y = round(footerRuleY);
+    layoutMetrics.text_overflow = bodyBottom() > textLimit - 2;
+    layoutMetrics.text_trimmed = textTrimmed;
+    layoutMetrics.headline_size = headlineSize;
+    layoutMetrics.body_size = stackBodySize;
     if (topNote !== null) {
       layoutMetrics.top_note_top = margin;
       layoutMetrics.top_note_bottom = round(margin + topNote.height);
@@ -825,7 +845,7 @@ export function composeDesign({
       bandBodySize * 0.25;
     let textTrimmed = false;
 
-    if (bottomNote !== null) {
+    if (bottomNote !== null || textScale !== 1) {
       while (bandBodySize > 11 && bodyBottom() > textLimit) {
         bandBodySize -= 1;
         bodyLines = wrapToWidth(copy.body, TYPEFACES.body, bandBodySize, columnWidth);
@@ -901,11 +921,13 @@ export function composeDesign({
           fill: ink
         })
       );
-      layoutMetrics.text_top = headlineTop;
-      layoutMetrics.text_bottom = round(bodyBottom());
-      layoutMetrics.text_overflow = bodyBottom() > textLimit - 2;
-      layoutMetrics.text_trimmed = textTrimmed;
     }
+    layoutMetrics.text_top = headlineTop;
+    layoutMetrics.text_bottom = round(bodyBottom());
+    layoutMetrics.text_overflow = bodyBottom() > textLimit - 2;
+    layoutMetrics.text_trimmed = textTrimmed;
+    layoutMetrics.headline_size = headlineSize;
+    layoutMetrics.body_size = bandBodySize;
     if (topNote !== null) {
       layoutMetrics.top_note_top = margin;
       layoutMetrics.top_note_bottom = round(margin + topNote.height);
@@ -999,6 +1021,8 @@ export function composeDesign({
     layoutMetrics.text_bottom = round(bodyTop + coverBodySize * 0.25);
     layoutMetrics.rule_y = round(textLimit);
     layoutMetrics.text_overflow = !fits();
+    layoutMetrics.headline_size = coverHeadlineSize;
+    layoutMetrics.body_size = coverBodySize;
     if (topNote !== null) {
       layoutMetrics.top_note_top = margin;
       layoutMetrics.top_note_bottom = round(margin + topNote.height);
@@ -1094,6 +1118,9 @@ export function composeDesign({
   if (copy.bottomText !== null) {
     actions.push('The optional line written by the user is set above the footer.');
   }
+  if (textScale !== 1) {
+    actions.push(`The text size was set to ${Math.round(textScale * 100)}% by the user.`);
+  }
 
   const svg = svgDocument({
     width,
@@ -1138,7 +1165,8 @@ export function composeDesign({
       audience: context.audience,
       text: context.text,
       topText: context.topText,
-      bottomText: context.bottomText
+      bottomText: context.bottomText,
+      textScale
     },
     colour: {
       colour_name: requested,

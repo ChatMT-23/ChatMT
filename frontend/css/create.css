@@ -378,6 +378,39 @@ img {
   letter-spacing: 0.04em;
 }
 
+.text-size-control {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.text-size-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.text-size-row input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--deep);
+  cursor: pointer;
+}
+
+.text-size-row output {
+  min-width: 46px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  text-align: right;
+}
+
+.text-size-row input[type="range"]:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
 .form-row {
   display: flex;
   align-items: center;

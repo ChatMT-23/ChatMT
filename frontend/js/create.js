@@ -31,6 +31,8 @@ const dom = {
   text: document.getElementById('flyer-text'),
   topText: document.getElementById('flyer-top-text'),
   bottomText: document.getElementById('flyer-bottom-text'),
+  textScale: document.getElementById('flyer-text-scale'),
+  textScaleValue: document.getElementById('flyer-text-scale-value'),
   imageFile: document.getElementById('flyer-image'),
   imageName: document.getElementById('image-name'),
   imageThumb: document.getElementById('image-thumb'),
@@ -120,6 +122,7 @@ function setBusy(busy, label = 'Creating…') {
   dom.text.disabled = busy;
   dom.topText.disabled = busy;
   dom.bottomText.disabled = busy;
+  dom.textScale.disabled = busy;
   dom.imageFile.disabled = busy;
   dom.consent.disabled = busy;
   dom.imageRemove.disabled = busy;
@@ -332,6 +335,7 @@ async function chooseBackground(index) {
         text: state.last.text,
         topText: state.last.topText ?? state.last.design?.topText ?? null,
         bottomText: state.last.bottomText ?? state.last.design?.bottomText ?? null,
+        textScale: state.last.textScale ?? state.last.design?.textScale ?? 1,
         colourName: state.last.input.colourName,
         image: state.image?.dataUrl ?? null,
         design: state.last.design,
@@ -402,6 +406,7 @@ async function createFlyer() {
         text,
         topText: dom.topText.value.trim(),
         bottomText: dom.bottomText.value.trim(),
+        textScale: Number(dom.textScale.value) / 100,
         image: state.image?.dataUrl ?? null,
         consent: dom.consent.checked,
         design: {}
@@ -466,6 +471,10 @@ function onImageChange() {
   };
   reader.readAsDataURL(file);
 }
+
+dom.textScale.addEventListener('input', () => {
+  dom.textScaleValue.textContent = `${dom.textScale.value}%`;
+});
 
 dom.form.addEventListener('submit', (event) => {
   event.preventDefault();

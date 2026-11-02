@@ -406,6 +406,8 @@ async function main() {
     assert((await count('#flyer-text')) === 1, 'the simple page has the text box');
     assert((await count('#flyer-top-text')) === 1, 'the simple page has the top text box');
     assert((await count('#flyer-bottom-text')) === 1, 'the simple page has the bottom text box');
+    assert((await count('#flyer-text-scale')) === 1, 'the simple page has the text size control');
+    assert((await text('#flyer-text-scale-value')) === '100%', 'the text size starts at 100%');
     assert((await count('#create-flyer')) === 1, 'the simple page has one create button');
     assert((await text('.rules-link')).includes('Rules on GitHub'), 'the rules link is on the page');
     assert((await hidden('#result')) === true, 'the result is hidden before the first creation');
@@ -423,6 +425,8 @@ async function main() {
     await setValue('#flyer-text', 'A yellow flyer');
     await setValue('#flyer-top-text', 'Save the date');
     await setValue('#flyer-bottom-text', 'Town Hall Square');
+    await setValue('#flyer-text-scale', '125');
+    assert((await text('#flyer-text-scale-value')) === '125%', 'the text size label follows the slider');
     await click('#consent');
     const simpleStartedAt = Date.now();
     await click('#create-flyer');
@@ -439,6 +443,7 @@ async function main() {
     const sent = JSON.parse(sentBody);
     assert(sent.topText === 'Save the date', 'the top text is sent to the backend');
     assert(sent.bottomText === 'Town Hall Square', 'the bottom text is sent to the backend');
+    assert(sent.textScale === 1.25, 'the text size is sent to the backend');
     assert((await text('#download')).includes('JPG'), 'the download is offered as a JPG');
     assert(
       (await evaluate("document.querySelector('#download').download")).endsWith('.jpg'),

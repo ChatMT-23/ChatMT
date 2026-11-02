@@ -304,7 +304,8 @@ export function createRequestHandler(config = loadConfig()) {
           design: {
             ...(body.design ?? {}),
             ...(body.topText === undefined ? {} : { topText: body.topText }),
-            ...(body.bottomText === undefined ? {} : { bottomText: body.bottomText })
+            ...(body.bottomText === undefined ? {} : { bottomText: body.bottomText }),
+            ...(body.textScale === undefined ? {} : { textScale: body.textScale })
           },
           image: body.image ?? null,
           variant: body.variant
@@ -319,6 +320,7 @@ export function createRequestHandler(config = loadConfig()) {
           text: body.text,
           topText: body.topText,
           bottomText: body.bottomText,
+          textScale: body.textScale,
           image: body.image ?? null,
           consent: body.consent,
           design: body.design ?? {}
@@ -333,6 +335,7 @@ export function createRequestHandler(config = loadConfig()) {
           text: body.text,
           topText: body.topText,
           bottomText: body.bottomText,
+          textScale: body.textScale,
           colourName: body.colourName ?? body.colour?.name,
           image: body.image ?? null,
           design: body.design ?? {},

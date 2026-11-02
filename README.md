@@ -91,8 +91,9 @@ panel and no profile panel in the way:
 
 1. write the words you want on the flyer;
 2. optionally add a line at the top and one at the bottom edge, if the flyer needs them;
-3. optionally add a photo;
-4. press **Create your flyer** once.
+3. choose the writing size with the slider (80–130%);
+4. optionally add a photo;
+5. press **Create your flyer** once.
 
 The backend infers the colour and the format from the text (the first palette colour named wins;
 blue is the default), applies the reason policy, generates the backgrounds and composes the SVG.

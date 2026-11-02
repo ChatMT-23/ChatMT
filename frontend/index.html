@@ -83,6 +83,23 @@
           </div>
           <p class="hint">Optional. They are drawn at the top and bottom edge of the flyer; leave them empty and nothing changes.</p>
 
+          <div class="text-size-control">
+            <label class="field-label" for="flyer-text-scale">Text size</label>
+            <div class="text-size-row">
+              <input
+                id="flyer-text-scale"
+                name="textScale"
+                type="range"
+                min="80"
+                max="130"
+                step="5"
+                value="100"
+              />
+              <output id="flyer-text-scale-value" for="flyer-text-scale">100%</output>
+            </div>
+          </div>
+          <p class="hint">Applies to the headline, the body and the two optional lines. The app still fits the writing inside the flyer.</p>
+
           <div class="form-row">
             <div class="upload-wrap">
               <img id="image-thumb" class="image-thumb" alt="" hidden />

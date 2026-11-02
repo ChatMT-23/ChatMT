@@ -1107,6 +1107,7 @@ test('the optional text above and below the flyer is accepted and composed at th
       text: 'Community market\nSaturday 10:00-18:00, Town Hall Square',
       topText: 'Save the date',
       bottomText: 'Free entry · All welcome',
+      textScale: 1.15,
       consent: true
     }
   });
@@ -1114,8 +1115,11 @@ test('the optional text above and below the flyer is accepted and composed at th
   assert.equal(response.status, 200);
   assert.equal(response.body.topText, 'Save the date');
   assert.equal(response.body.bottomText, 'Free entry · All welcome');
+  assert.equal(response.body.textScale, 1.15);
   assert.equal(response.body.design.topText, 'Save the date');
   assert.equal(response.body.design.bottomText, 'Free entry · All welcome');
+  assert.equal(response.body.design.textScale, 1.15);
+  assert.equal(response.body.composition.layout.text_scale, 1.15);
   assert.equal(response.body.composition.copy.topText, 'Save the date');
   assert.equal(response.body.composition.copy.bottomText, 'Free entry · All welcome');
   assert.ok(response.body.composition.layout.top_note_top >= 0);
@@ -1132,6 +1136,7 @@ test('the optional text above and below the flyer is accepted and composed at th
       text: 'Community market\nSaturday 10:00-18:00, Town Hall Square',
       topText: 'Save the date',
       bottomText: 'Free entry · All welcome',
+      textScale: 1.15,
       colourName: 'blue',
       backgroundIndex: 0,
       count: 1
@@ -1140,8 +1145,10 @@ test('the optional text above and below the flyer is accepted and composed at th
   assert.equal(recomposed.status, 200);
   assert.equal(recomposed.body.topText, 'Save the date');
   assert.equal(recomposed.body.bottomText, 'Free entry · All welcome');
+  assert.equal(recomposed.body.textScale, 1.15);
   assert.equal(recomposed.body.composition.copy.topText, 'Save the date');
   assert.equal(recomposed.body.composition.copy.bottomText, 'Free entry · All welcome');
+  assert.equal(recomposed.body.composition.layout.text_scale, 1.15);
 
   const tooLong = await api('/api/design/flyer', {
     method: 'POST',
@@ -1156,6 +1163,13 @@ test('the optional text above and below the flyer is accepted and composed at th
   });
   assert.equal(notText.status, 400);
   assert.equal(notText.body.error.code, 'bottomText_not_text');
+
+  const badScale = await api('/api/design/flyer', {
+    method: 'POST',
+    body: { userId: 'note-flyer-user', text: 'A blue flyer', textScale: 2 }
+  });
+  assert.equal(badScale.status, 400);
+  assert.equal(badScale.body.error.code, 'textScale_invalid');
 });
 
 test('the cut-out removes the original background and keeps the subject opaque', async () => {
