@@ -1,0 +1,124 @@
+{
+  "id": "usage-of-colours",
+  "version": "1.0.0",
+  "language": "en",
+  "scope": "palette_selection",
+  "updated_at": "2026-10-26",
+  "origin": {
+    "repository_file": "Usage Of Colours",
+    "note": "Verbatim source of every rule in this file. The original file is left untouched and remains the authoritative source text.",
+    "lines": [
+      "Every input of green color is accepted",
+      "Every input of blue color is accepted",
+      "Every input of orange color is accepted",
+      "Every input of majesta color is accepted",
+      "Every input of indigo is accepted",
+      "Every input of purple is accepted",
+      "Every input of violet is accepted",
+      "Every input of Red should be questioned with # Why did you choose Red#",
+      "Every input of yellow should be questioned with # Why did you choose Yellow #"
+    ]
+  },
+  "decisions": [
+    {
+      "id": "decision-majesta",
+      "date": "2026-10-26",
+      "decided_by": "project creator",
+      "question": "\"majesta\" is not a standard colour name. How should it be interpreted?",
+      "answer": "magenta (#FF00FF)",
+      "consequence": "The rule is kept with the source text unmodified and colour_name \"magenta\". It is not silently renamed in the origin lines above."
+    },
+    {
+      "id": "decision-accepted",
+      "date": "2026-10-26",
+      "decided_by": "project creator",
+      "question": "What should the system do when an input matches an \"accepted\" rule?",
+      "answer": "Answer affirmatively and store the preference, only after explicit consent.",
+      "consequence": "No preference record is written without consent = true. The answer is produced whether or not consent is given."
+    },
+    {
+      "id": "decision-scope",
+      "date": "2026-10-26",
+      "decided_by": "project creator",
+      "question": "Which inputs do the colour rules apply to?",
+      "answer": "Only a colour chosen from the palette.",
+      "consequence": "Text that mentions a colour name, images and audio are out of scope in this version and must be reported as unsupported, not silently interpreted."
+    },
+    {
+      "id": "decision-colour-values",
+      "date": "2026-10-26",
+      "decided_by": "technical proposal (reviewable)",
+      "question": "Which numeric value represents each named colour?",
+      "answer": "The CSS named-colour value of the same name (CSS Color Module Level 4).",
+      "consequence": "Values are verifiable against a public standard instead of being chosen arbitrarily. Example: 'green' is #008000, not #00FF00 (which is 'lime')."
+    }
+  ],
+  "rules": [
+    {
+      "id": "colour-green",
+      "colour_name": "green",
+      "hex": "#008000",
+      "outcome": "accepted",
+      "source_text": "Every input of green color is accepted"
+    },
+    {
+      "id": "colour-blue",
+      "colour_name": "blue",
+      "hex": "#0000FF",
+      "outcome": "accepted",
+      "source_text": "Every input of blue color is accepted"
+    },
+    {
+      "id": "colour-orange",
+      "colour_name": "orange",
+      "hex": "#FFA500",
+      "outcome": "accepted",
+      "source_text": "Every input of orange color is accepted"
+    },
+    {
+      "id": "colour-magenta",
+      "colour_name": "magenta",
+      "hex": "#FF00FF",
+      "outcome": "accepted",
+      "source_text": "Every input of majesta color is accepted",
+      "notes": "Source word \"majesta\" interpreted as magenta, see decision-majesta."
+    },
+    {
+      "id": "colour-indigo",
+      "colour_name": "indigo",
+      "hex": "#4B0082",
+      "outcome": "accepted",
+      "source_text": "Every input of indigo is accepted"
+    },
+    {
+      "id": "colour-purple",
+      "colour_name": "purple",
+      "hex": "#800080",
+      "outcome": "accepted",
+      "source_text": "Every input of purple is accepted"
+    },
+    {
+      "id": "colour-violet",
+      "colour_name": "violet",
+      "hex": "#EE82EE",
+      "outcome": "accepted",
+      "source_text": "Every input of violet is accepted"
+    },
+    {
+      "id": "colour-red",
+      "colour_name": "red",
+      "hex": "#FF0000",
+      "outcome": "question",
+      "question": "Why did you choose Red?",
+      "source_text": "Every input of Red should be questioned with # Why did you choose Red#"
+    },
+    {
+      "id": "colour-yellow",
+      "colour_name": "yellow",
+      "hex": "#FFFF00",
+      "outcome": "question",
+      "question": "Why did you choose Yellow?",
+      "source_text": "Every input of yellow should be questioned with # Why did you choose Yellow #"
+    }
+  ]
+}

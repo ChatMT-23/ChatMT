@@ -1,0 +1,6 @@
+# Vercel must use the static frontend + serverless API, not the Dockerfile.
+Dockerfile
+Dockerfile.*
+data
+.env
+.env.*

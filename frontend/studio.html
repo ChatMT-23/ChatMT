@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#F4F1E9" />
+    <title>ChatMT — Create Your Flyer</title>
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body id="top">
+    <a class="skip-link" href="#chat-input">Skip to the chat input</a>
+
+    <header class="press-bar">
+      <div class="press-bar-inner">
+        <a class="brand" href="#top" aria-label="ChatMT, back to the top">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 40 40" role="presentation" focusable="false">
+              <circle cx="20" cy="20" r="13.5" fill="none" stroke="currentColor" stroke-width="1.2" />
+              <path d="M20 1.5v37M1.5 20h37" stroke="currentColor" stroke-width="1.2" />
+              <circle cx="20" cy="20" r="3.4" fill="currentColor" />
+            </svg>
+          </span>
+          <span class="brand-text">
+            <span class="brand-name">ChatMT</span>
+            <span class="brand-tag">Colour studies · Vol. 02</span>
+          </span>
+        </a>
+        <div class="topbar-chips" aria-label="Session">
+          <span class="chip"><span class="chip-key">user</span><code id="user-id">local-user</code></span>
+          <span class="chip"><span class="chip-key">api</span><code id="api-base">/api</code></span>
+          <span class="chip"><span class="chip-key">model</span><code id="llm-state">reading…</code></span>
+          <button id="theme-toggle" class="theme-toggle" type="button" aria-pressed="false" title="Switch between the white sheet and the blue blueprint">
+            <span class="chip-key">theme</span><span id="theme-value" class="theme-value">white</span>
+          </button>
+        </div>
+      </div>
+      <div class="spectral" aria-hidden="true">
+        <div id="spectral-register" class="spectral-register"></div>
+        <span class="spectral-note">CIEDE2000 · CIELAB</span>
+      </div>
+    </header>
+
+    <div id="app-status" class="status" role="alert" hidden></div>
+
+    <div class="sheet">
+      <!-- ============ SHEET ============ -->
+      <main class="main">
+        <header class="masthead">
+          <div class="masthead-top">
+            <p class="eyebrow">Reflective and regenerative AI · phase 2</p>
+            <p class="edition">Edition 02 / 2026</p>
+          </div>
+          <div class="masthead-grid">
+            <div class="masthead-copy">
+              <h1>Create<br />Your Flyer<span class="full-stop">.</span></h1>
+              <p class="hero-sub">Pick a colour below. ChatMT answers here, like in a chat — friendly or less enthusiastic, depending on your reason.</p>
+            </div>
+            <figure class="hero-specimen" id="hero-specimen" aria-hidden="true">
+              <div class="hero-specimen-field is-empty" id="hero-specimen-field"></div>
+              <figcaption class="hero-specimen-caption">
+                <span id="hero-specimen-name">No specimen</span>
+                <span id="hero-specimen-hex" class="mono">—</span>
+              </figcaption>
+            </figure>
+          </div>
+          <dl class="masthead-facts">
+            <div><dt>Method</dt><dd>CIEDE2000</dd></div>
+            <div><dt>Coded colours</dt><dd>9</dd></div>
+            <div><dt>Uncoded</dt><dd>6</dd></div>
+            <div><dt>Rule</dt><dd>Suggest, never choose</dd></div>
+          </dl>
+        </header>
+
+        <p id="delay-notice" class="delay" role="status" hidden></p>
+
+        <div id="chat-thread" class="chat-thread" aria-live="polite" aria-label="Conversation with ChatMT">
+          <div class="msg msg-assistant" id="chat-welcome">
+            <div class="msg-avatar" aria-hidden="true">MT</div>
+            <div class="msg-body">
+              <p><strong>Hi, I am ChatMT.</strong> Choose one of the 7 rainbow colours (or the full palette) to start your flyer. If you pick red or yellow, I will ask you <em>why</em> — a cogent reason (meaning, purpose, audience, brand, contrast) keeps me friendly, a personal one (“I just like it”) makes me less enthusiastic next time.</p>
+              <p class="hint">CIEDE2000 · CIELAB · 9 coded colours · 6 uncoded · memory on the server · the app suggests, you choose.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Palette: the 7 rainbow colours first, then the full standard palette (ids kept for the tests) -->
+        <section class="plate plate-palette" aria-labelledby="palette-heading">
+          <div class="plate-head">
+            <span class="plate-num" aria-hidden="true">05</span>
+            <div class="plate-heading">
+              <h2 id="palette-heading">Choose a colour</h2>
+              <p class="plate-note">9 coded · 6 uncoded</p>
+            </div>
+          </div>
+          <h3 class="group-title">Rainbow — pick one to start</h3>
+          <div id="palette-rainbow" class="palette palette-rainbow" role="group" aria-label="Rainbow colours"></div>
+          <h3 class="group-title">With a standard code</h3>
+          <p class="hint">The nine colours written in <code>standards/colour-meanings.json</code>.</p>
+          <div id="palette-covered" class="palette palette-covered" role="group" aria-label="Colours with a standard code"></div>
+          <h3 class="group-title">Without a standard code</h3>
+          <p class="hint">Deliberately left out of the standard. ChatMT reports that it has no rule for them instead of guessing one.</p>
+          <div id="palette-uncovered" class="palette palette-uncovered" role="group" aria-label="Colours with no standard code"></div>
+          <p class="hint footnote">
+            Five colours are encouraged. Magenta carries the same meaning as indigo, and purple the same as violet, so
+            they are encouraged too. Red and yellow are questioned: choosing one asks a question, and the answer changes
+            the profile.
+          </p>
+
+          <div id="reason-block" class="reason" hidden>
+            <label for="reason-input" id="reason-label">Your reason</label>
+            <textarea id="reason-input" rows="3" placeholder="Write why you chose this colour…"></textarea>
+            <button id="reason-send" type="button">Send answer</button>
+            <p class="hint">
+              The standard code asks this question before accepting the colour. An absent reason is personal in nature:
+              it makes the profile not friendly and delays the answers, while the preference itself is not stored until
+              the question is answered.
+            </p>
+          </div>
+        </section>
+
+        <!-- Free chat input: reasons and background questions can also be typed here -->
+        <form id="chat-form" class="composer" autocomplete="off">
+          <label class="composer-label" for="chat-input">Message ChatMT</label>
+          <div class="composer-row">
+            <textarea id="chat-input" rows="2" placeholder="Type your reason here (e.g. why red?) or pick a colour above…"></textarea>
+            <button id="chat-send" type="submit" aria-label="Send message">↑</button>
+          </div>
+          <p class="hint">Tip: if ChatMT asked “why”, just type the reason here — it is sent as your answer.</p>
+        </form>
+
+        <!-- Assistant answer rendered as a chat bubble + full detail below (ids kept) -->
+        <section class="plate plate-answer" aria-labelledby="answer-heading">
+          <div class="plate-head">
+            <span class="plate-num" aria-hidden="true">06</span>
+            <div class="plate-heading">
+              <h2 id="answer-heading">ChatMT answers</h2>
+              <p class="plate-note">measure · rule · judgement</p>
+            </div>
+          </div>
+          <div id="answer" aria-live="polite">
+            <p class="hint">Pick a colour to see how ChatMT answers and why.</p>
+          </div>
+        </section>
+
+        <section class="plate plate-suggestions" aria-labelledby="design-heading">
+          <div class="plate-head">
+            <span class="plate-num" aria-hidden="true">07</span>
+            <div class="plate-heading">
+              <h2 id="design-heading">Background suggestions</h2>
+              <p class="plate-note">the app suggests · you choose</p>
+            </div>
+          </div>
+          <p class="hint">
+            The app suggests; you choose. Nothing here is applied to your design automatically, and the number of
+            suggestions depends on the profile (five for a friendly profile, two for a not friendly one).
+          </p>
+          <div id="suggestions">
+            <p class="hint">Pick a colour to see the background suggestions.</p>
+          </div>
+          <div id="chosen-background" class="chosen" aria-live="polite">
+            <p class="hint">No background chosen by you yet.</p>
+          </div>
+          <div id="background-preview" class="background-preview" aria-hidden="true" hidden></div>
+        </section>
+
+        <!-- Image studio: upload / crop / brighten -->
+        <section class="plate" aria-labelledby="studio-heading">
+          <div class="plate-head">
+            <span class="plate-num" aria-hidden="true">08</span>
+            <div class="plate-heading">
+              <h2 id="studio-heading">Your photo</h2>
+              <p class="plate-note">upload · crop · brighten</p>
+            </div>
+          </div>
+          <p class="hint">Upload your picture, frame it and brighten it. Nothing is uploaded to the server unless you crop through the API.</p>
+          <div class="controls controls-inline studio-controls">
+            <label class="file-button" for="image-file">Upload image</label>
+            <input id="image-file" type="file" accept="image/png,image/jpeg,image/bmp" hidden />
+            <label for="image-brighten">Brighten</label>
+            <input id="image-brighten" type="range" min="100" max="200" value="100" step="5" />
+            <span id="image-brighten-value" class="hint">100%</span>
+            <button id="image-reset" type="button" class="secondary">Reset photo</button>
+          </div>
+          <div class="studio-grid">
+            <div class="studio-preview-wrap">
+              <img id="image-preview" alt="Your uploaded photo" hidden />
+              <p id="image-empty" class="hint">No image yet — upload one to start.</p>
+            </div>
+            <div class="controls controls-stacked">
+              <p class="hint"><strong>Crop</strong> (pixels, sent to <code>POST /api/design/transform</code>)</p>
+              <label for="image-crop-x">X</label>
+              <input id="image-crop-x" type="number" min="0" value="0" />
+              <label for="image-crop-y">Y</label>
+              <input id="image-crop-y" type="number" min="0" value="0" />
+              <label for="image-crop-w">Width</label>
+              <input id="image-crop-w" type="number" min="1" value="400" />
+              <label for="image-crop-h">Height</label>
+              <input id="image-crop-h" type="number" min="1" value="300" />
+              <button id="image-apply-crop" type="button">Crop with the server</button>
+            </div>
+          </div>
+          <p id="image-status" class="hint" role="status"></p>
+        </section>
+
+        <!-- Automatic composition: the app does the layout, the crop and the copy -->
+        <section class="plate plate-compose" aria-labelledby="compose-heading">
+          <div class="plate-head">
+            <span class="plate-num" aria-hidden="true">09</span>
+            <div class="plate-heading">
+              <h2 id="compose-heading">Your flyer, composed</h2>
+              <p class="plate-note">photo placed · text written · one press</p>
+            </div>
+          </div>
+          <p class="hint">
+            The app does the graphic work here. It fits your photo into the frame (no manual crop), places a scrim so
+            the text stays readable, wraps the headline and writes the copy from the meaning of the colour you chose.
+            You press once and type nothing.
+          </p>
+          <div class="controls controls-inline compose-controls">
+            <button id="compose-run" type="button" disabled title="Choose a colour first">Compose it for me</button>
+            <a id="compose-download" class="link-button" href="#" download="chatmt-design.jpg" hidden>Download JPG</a>
+            <span id="compose-status" class="hint" role="status"></span>
+          </div>
+          <figure class="compose-frame">
+            <img id="compose-preview" alt="The design composed by ChatMT" hidden />
+            <p id="compose-empty" class="hint">Pick a colour, then press once: the app composes the design.</p>
+            <figcaption id="compose-caption" class="hint"></figcaption>
+          </figure>
+          <div id="compose-notes"></div>
+        </section>
+
+        <section class="plate plate-questioned" aria-labelledby="background-heading">
+          <div class="plate-head">
+            <span class="plate-num" aria-hidden="true">10</span>
+            <div class="plate-heading">
+              <h2 id="background-heading">A red or yellow background</h2>
+              <p class="plate-note">on request · cogent reason required</p>
+            </div>
+          </div>
+          <p class="hint">
+            Backgrounds tending towards red or yellow are suggested only when you ask for them and give a cogent
+            reason. When you ask, the app asks immediately why. A reason that is personal, or no reason at all,
+            activates the unfriendly mood and stores the profile for the next engagement.
+          </p>
+          <div class="controls controls-inline">
+            <label for="background-colour">Background colour</label>
+            <select id="background-colour">
+              <option value="red">red</option>
+              <option value="yellow">yellow</option>
+            </select>
+            <button id="background-ask" type="button">Ask for this background</button>
+          </div>
+          <div id="background-question" class="reason" hidden>
+            <label for="background-reason" id="background-question-label">Why do you want this background?</label>
+            <textarea id="background-reason" rows="3" placeholder="For the warning sign on the poster…"></textarea>
+            <button id="background-send" type="button">Send the reason</button>
+          </div>
+          <div id="background-result"></div>
+        </section>
+
+        <section class="plate" aria-labelledby="matches-heading">
+          <div class="plate-head">
+            <span class="plate-num" aria-hidden="true">11</span>
+            <div class="plate-heading">
+              <h2 id="matches-heading">Matches and contradictions</h2>
+              <p class="plate-note">nearest standard · uncertainty</p>
+            </div>
+          </div>
+          <div id="matches">
+            <p class="hint">Nothing to show yet.</p>
+          </div>
+        </section>
+
+        <section class="plate" aria-labelledby="why-heading">
+          <div class="plate-head">
+            <span class="plate-num" aria-hidden="true">12</span>
+            <div class="plate-heading">
+              <h2 id="why-heading">Why this answer</h2>
+              <p class="plate-note">data · rules · limits</p>
+            </div>
+          </div>
+          <div id="why">
+            <p class="hint">The data used, the rules applied and the uncertainty are listed here, in short form.</p>
+          </div>
+        </section>
+
+        <section class="plate" aria-labelledby="correction-heading">
+          <div class="plate-head">
+            <span class="plate-num" aria-hidden="true">13</span>
+            <div class="plate-heading">
+              <h2 id="correction-heading">Correction</h2>
+              <p class="plate-note">a separate record · never automatic</p>
+            </div>
+          </div>
+          <div id="correction" class="correction" hidden>
+            <h3 class="group-title">Something wrong with this answer?</h3>
+            <div class="controls">
+              <label for="correction-outcome">What should the standard say about this colour?</label>
+              <select id="correction-outcome">
+                <option value="accepted">It should be accepted</option>
+                <option value="question">It should be questioned</option>
+                <option value="no-standard">There should be no rule for it</option>
+              </select>
+              <label for="correction-note">Note (optional)</label>
+              <input id="correction-note" type="text" maxlength="200" />
+              <button id="correction-record" type="button">Record correction</button>
+            </div>
+            <p class="hint">
+              A correction is stored as a separate record (memory category D). It never changes the standard code by
+              itself: the standard can only be changed by an explicit, documented decision.
+            </p>
+          </div>
+          <div id="correction-empty-hint">
+            <p class="hint">Pick a colour first — the correction form appears after an answer.</p>
+          </div>
+        </section>
+      </main>
+
+      <!-- ============ JOB TICKET ============ -->
+      <aside class="ticket" aria-label="Profile, memory and settings">
+        <div class="ticket-meta"><span>Job ticket</span><span>29 · 10 · 2026</span></div>
+
+        <section class="ticket-block" aria-labelledby="selection-heading">
+          <div class="block-head">
+            <span class="block-num" aria-hidden="true">01</span>
+            <h2 id="selection-heading">Your selection</h2>
+          </div>
+          <div id="selection" class="selection" aria-live="polite">
+            <p class="hint">No colour selected yet.</p>
+          </div>
+          <label class="consent" for="consent">
+            <input type="checkbox" id="consent" />
+            <span>
+              I agree to store my colour preferences and my profile on the server, so that the app
+              can answer with them and express displeasure at the next interaction when it has to. I can delete everything with the button
+              below.
+            </span>
+          </label>
+          <p id="consent-note" class="hint" role="status"></p>
+          <div class="actions-row">
+            <button id="clear-memory" type="button" class="danger">Delete all stored data for this user</button>
+          </div>
+        </section>
+
+        <section class="ticket-block" aria-labelledby="profile-heading">
+          <div class="block-head">
+            <span class="block-num" aria-hidden="true">02</span>
+            <h2 id="profile-heading">Your profile</h2>
+          </div>
+          <div id="profile">
+            <p class="hint">The profile has not been read yet.</p>
+          </div>
+          <h3 class="group-title">Messages due at this interaction</h3>
+          <div id="standing-messages">
+            <p class="hint">Nothing is due.</p>
+          </div>
+        </section>
+
+        <section class="ticket-block" aria-labelledby="flyer-heading">
+          <div class="block-head">
+            <span class="block-num" aria-hidden="true">03</span>
+            <h2 id="flyer-heading">Flyer setup</h2>
+          </div>
+          <div class="controls controls-stacked">
+            <label for="design-type">Design</label>
+            <select id="design-type"></select>
+            <label for="design-subject">Subject</label>
+            <input id="design-subject" type="text" maxlength="200" placeholder="Jazz night" />
+            <label for="design-audience">Audience</label>
+            <input id="design-audience" type="text" maxlength="200" placeholder="Students" />
+            <button id="design-update" type="button" class="secondary">Update suggestions</button>
+          </div>
+        </section>
+
+        <section class="ticket-block" aria-labelledby="memory-heading">
+          <div class="block-head">
+            <span class="block-num" aria-hidden="true">04</span>
+            <h2 id="memory-heading">Memory on the server</h2>
+          </div>
+          <p class="hint">Nothing is written without consent.</p>
+          <div id="memory-status" class="memory-status"></div>
+          <ul id="memory-list" class="memory-list"></ul>
+        </section>
+
+        <div class="ticket-foot">
+          <span class="registration-mark" aria-hidden="true"></span>
+          <span>Suggest, never choose.</span>
+        </div>
+      </aside>
+    </div>
+
+    <footer class="colophon">
+      <div class="colophon-mark" aria-hidden="true">
+        <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <p>
+        The measurement is a CIEDE2000 distance in CIELAB. It is not a statement about your taste: two colours can be
+        very close to each other without you liking both.
+      </p>
+      <p class="colophon-credit">Created by Francesco Bulla. See <code>docs/architettura.md</code>, <code>docs/backend-api.md</code> and <code>docs/test.md</code>.</p>
+    </footer>
+
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>

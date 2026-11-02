@@ -1,0 +1,8 @@
+# Files that must not end up in the image.
+.git
+.gitignore
+node_modules
+data
+.env
+.env.*
+npm-debug.log*

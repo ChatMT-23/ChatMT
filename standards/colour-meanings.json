@@ -1,0 +1,81 @@
+{
+  "id": "colour-meanings",
+  "version": "2.0.0",
+  "language": "en",
+  "scope": "palette_selection",
+  "updated_at": "2026-10-29",
+  "origin": {
+    "kind": "project creator messages",
+    "dates": ["2026-10-28", "2026-10-29"],
+    "note": "Meanings and assistance rules dictated by the project creator. Only the meanings written there are recorded here: no meaning is invented for any other colour. The 2026-10-29 messages added the equivalence of magenta and purple, the meaning of a lesser effort (a delay plus fewer suggestions), the recurrence of the displeasure, the treatment of an absent reason, and the rule that red and yellow backgrounds are only suggested on request and after a cogent reason."
+  },
+  "encouraged": [
+    { "colour_name": "green", "hex": "#008000", "meaning": "prosperity and peace" },
+    { "colour_name": "blue", "hex": "#0000FF", "meaning": "abundance" },
+    { "colour_name": "orange", "hex": "#FFA500", "meaning": "joy and happiness" },
+    { "colour_name": "indigo", "hex": "#4B0082", "meaning": "victory" },
+    { "colour_name": "violet", "hex": "#EE82EE", "meaning": "safety" }
+  ],
+  "equivalent": [
+    { "colour_name": "magenta", "hex": "#FF00FF", "same_as": "indigo", "meaning": "victory" },
+    { "colour_name": "purple", "hex": "#800080", "same_as": "violet", "meaning": "safety" }
+  ],
+  "questioned": [
+    { "colour_name": "red", "hex": "#FF0000", "meanings": ["danger", "royalty"] },
+    { "colour_name": "yellow", "hex": "#FFFF00", "meanings": ["anger", "determination"] }
+  ],
+  "assistance": {
+    "extensive": { "suggestion_limit": 5, "detail": "full", "delay_ms": 0 },
+    "reduced": { "suggestion_limit": 2, "detail": "brief", "delay_ms": 900 }
+  },
+  "backgrounds": {
+    "questioned_requires_request": true,
+    "questioned_requires_cogent_reason": true,
+    "question": "Why do you want a red or yellow background?",
+    "suggestion_limit": 3,
+    "choice": "user",
+    "note": "The app suggests backgrounds; it never chooses one for the user. A red or yellow background is suggested only when the user asks for it and gives a cogent reason."
+  },
+  "policies": [
+    {
+      "id": "policy-friendly-five",
+      "text": "Choosing green, blue, orange, indigo or violet makes the profile friendly, and so does choosing magenta or purple, which carry the same meanings as indigo and violet."
+    },
+    {
+      "id": "policy-personal-reason",
+      "text": "A personal reason for choosing red or yellow is stored as a not friendly profile, and the app expresses displeasure about it the next time the user engages the app."
+    },
+    {
+      "id": "policy-absent-reason",
+      "text": "An absent reason for choosing red or yellow is personal in nature: the profile is stored as not friendly, while the colour preference is not stored until the question is answered."
+    },
+    {
+      "id": "policy-cogent-reason",
+      "text": "A cogent reason for choosing red or yellow stores the profile with the same friendly tone as the five encouraged colours, and unlocks red or yellow backgrounds."
+    },
+    {
+      "id": "policy-recurring-displeasure",
+      "text": "The displeasure can recur: every time the user still chooses red or yellow without a cogent reason, it is expressed again at the next interaction."
+    },
+    {
+      "id": "policy-lesser-help",
+      "text": "A lesser effort for a not friendly profile means a small delay before the outputs are displayed and fewer background suggestions: the numbers are declared in assistance.reduced."
+    },
+    {
+      "id": "policy-questioned-backgrounds",
+      "text": "Backgrounds tending towards red or yellow are suggested only when the user requests them and gives a cogent reason for that request. When the user requests one, the app immediately asks why; a reason that is not cogent activates the unfriendly mood and stores the profile for the next engagement."
+    },
+    {
+      "id": "policy-suggestion-only",
+      "text": "The app suggests backgrounds and never chooses which background the user uses."
+    },
+    {
+      "id": "policy-representations",
+      "text": "When the user asks why the app is biased against red and yellow, the app displays the recorded representations of the colours."
+    },
+    {
+      "id": "policy-five-colours",
+      "text": "Users who choose green, blue, orange, indigo, violet, magenta or purple, or who give a cogent reason for red or yellow, are encouraged and assisted extensively with graphic backgrounds and designs tending towards the five encouraged colours."
+    }
+  ]
+}

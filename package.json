@@ -1,0 +1,23 @@
+{
+  "name": "chatmt",
+  "version": "0.3.0",
+  "private": true,
+  "description": "ChatMT - reflective and regenerative AI prototype. Colour preference engine, reason policy for red and yellow, friendliness profile, background suggestions, image operations, and the interface served by the same backend.",
+  "type": "module",
+  "scripts": {
+    "start": "node backend/server.js",
+    "test": "node tests/run-tests.mjs",
+    "test:backend": "node --test tests/backend.test.mjs",
+    "test:browser": "node tests/browser-checks.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "@techstark/opencv-js": "^5.0.0-release.1",
+    "fontkit": "^2.0.4",
+    "jimp": "^1.6.1"
+  }
+}
