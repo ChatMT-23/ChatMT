@@ -119,6 +119,7 @@ export function createComposeService({
             label: background.label ?? null,
             fallback: background.fallback === true,
             thumbnail: background.thumbnail ?? null,
+            svg: typeof background.svg === 'string' ? background.svg : null,
             image:
               typeof background.image === 'string' && background.image.startsWith('data:image/')
                 ? background.image
@@ -129,6 +130,32 @@ export function createComposeService({
 
     let backgroundImage = backgroundRecord?.image ?? null;
     let subject = null;
+
+    // A fallback background is an SVG gradient. The cut-out needs a raster ground to be baked
+    // into, otherwise the photo would stay framed with its old background. Render that one
+    // fallback here, so the same single-picture path works with or without OpenRouter.
+    if (
+      preparedPhoto?.cutout &&
+      backgroundImage !== null &&
+      !isRasterImageDataUrl(backgroundImage) &&
+      raster !== null &&
+      typeof backgroundRecord?.svg === 'string'
+    ) {
+      try {
+        const rendered = await raster.render(backgroundRecord.svg);
+        backgroundImage = rendered.image;
+        backgroundRecord = {
+          ...backgroundRecord,
+          image: rendered.image,
+          rasterized: true,
+          raster_width: rendered.width,
+          raster_height: rendered.height
+        };
+      } catch {
+        // Keep the SVG ground and the framed photo treatment: a clean frame is better than a
+        // broken composite.
+      }
+    }
 
     if (preparedPhoto?.cutout && backgroundImage !== null && isRasterImageDataUrl(backgroundImage)) {
       try {

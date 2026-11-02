@@ -21,7 +21,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { Jimp } from 'jimp';
 
-const ALGORITHM = 'grabcut-v2';
+const ALGORITHM = 'grabcut-v3';
 const WORK_WIDTH = 400;
 const MAX_INPUT_WIDTH = 1200;
 const MAX_INPUT_HEIGHT = 1600;
@@ -85,7 +85,128 @@ function fillHoles(foreground, width, height) {
   return filled;
 }
 
-/** Isolated foreground specks are not part of the subject and are removed. */
+/** Binary erosion with a square kernel: thin bridges between the subject and background go away. */
+function erodeMask(foreground, width, height, radius) {
+  const horizontal = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let keep = 1;
+      for (let dx = -radius; dx <= radius; dx++) {
+        const nx = x + dx;
+        if (nx < 0 || nx >= width || foreground[y * width + nx] === 0) {
+          keep = 0;
+          break;
+        }
+      }
+      horizontal[y * width + x] = keep;
+    }
+  }
+
+  const result = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let keep = 1;
+      for (let dy = -radius; dy <= radius; dy++) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= height || horizontal[ny * width + x] === 0) {
+          keep = 0;
+          break;
+        }
+      }
+      result[y * width + x] = keep;
+    }
+  }
+  return result;
+}
+
+/** Binary dilation with the same kernel, used to restore the subject edge after the erosion. */
+function dilateMask(foreground, width, height, radius) {
+  const horizontal = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let value = 0;
+      for (let dx = -radius; dx <= radius; dx++) {
+        const nx = x + dx;
+        if (nx < 0 || nx >= width) continue;
+        if (foreground[y * width + nx] === 1) {
+          value = 1;
+          break;
+        }
+      }
+      horizontal[y * width + x] = value;
+    }
+  }
+
+  const result = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let value = 0;
+      for (let dy = -radius; dy <= radius; dy++) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= height) continue;
+        if (horizontal[ny * width + x] === 1) {
+          value = 1;
+          break;
+        }
+      }
+      result[y * width + x] = value;
+    }
+  }
+  return result;
+}
+
+/**
+ * Only the main subject survives. GrabCut can classify a window, a lamp or a piece of furniture
+ * as foreground because it only receives a coarse rectangle; those objects are separate
+ * connected components, so keeping the largest component removes them completely. Eight
+ * neighbours are used so that a diagonal edge of the subject is not split in two.
+ */
+function keepLargestComponent(foreground, width, height) {
+  const seen = new Uint8Array(width * height);
+  const stack = new Int32Array(width * height);
+  const components = [];
+  let best = null;
+
+  for (let start = 0; start < width * height; start++) {
+    if (!foreground[start] || seen[start]) continue;
+    let top = 0;
+    stack[top++] = start;
+    seen[start] = 1;
+    const members = [];
+    while (top > 0) {
+      const index = stack[--top];
+      members.push(index);
+      const x = index % width;
+      const y = (index / width) | 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= height) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x + dx;
+          if (nx < 0 || nx >= width) continue;
+          const neighbour = ny * width + nx;
+          if (!foreground[neighbour] || seen[neighbour]) continue;
+          seen[neighbour] = 1;
+          stack[top++] = neighbour;
+        }
+      }
+    }
+    const component = { members, area: members.length };
+    components.push(component);
+    if (best === null || component.area > best.area) best = component;
+  }
+
+  let removed = 0;
+  for (const component of components) {
+    if (component === best) continue;
+    for (const index of component.members) foreground[index] = 0;
+    removed += component.area;
+  }
+  return removed;
+}
+
+/** Tiny isolated specks are not part of the subject and are removed. */
 function removeSpecks(foreground, width, height) {
   const seen = new Uint8Array(width * height);
   const stack = new Int32Array(width * height);
@@ -126,6 +247,55 @@ function removeSpecks(foreground, width, height) {
     }
   }
   return removed;
+}
+
+/**
+ * The alpha edge is blurred, so a few pixels are partly transparent while their RGB still
+ * contains the old background. Fill that fringe with the nearest opaque subject colour: when
+ * the subject is composited on the new ground, no old colour is left around the outline.
+ */
+function decontaminateEdges(pixels, width, height, maxDistance) {
+  const filled = new Uint8Array(width * height);
+  const queue = new Int32Array(width * height);
+  let head = 0;
+  let tail = 0;
+
+  for (let index = 0; index < width * height; index++) {
+    if (pixels[index * 4 + 3] >= 250) {
+      filled[index] = 1;
+      queue[tail++] = index;
+    }
+  }
+
+  let distance = 0;
+  while (head < tail && distance < maxDistance) {
+    const levelEnd = tail;
+    while (head < levelEnd) {
+      const index = queue[head++];
+      const x = index % width;
+      const y = (index / width) | 0;
+      const source = index * 4;
+      for (let dy = -1; dy <= 1; dy++) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= height) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x + dx;
+          if (nx < 0 || nx >= width) continue;
+          const neighbour = ny * width + nx;
+          if (filled[neighbour]) continue;
+          const offset = neighbour * 4;
+          if (pixels[offset + 3] === 0) continue;
+          pixels[offset] = pixels[source];
+          pixels[offset + 1] = pixels[source + 1];
+          pixels[offset + 2] = pixels[source + 2];
+          filled[neighbour] = 1;
+          queue[tail++] = neighbour;
+        }
+      }
+    }
+    distance++;
+  }
 }
 
 function boundingBox(foreground, width, height) {
@@ -199,7 +369,7 @@ export function createCutoutService({ cacheDir = null, workWidth = WORK_WIDTH } 
     const rect = new cv.Rect(inset, inset, width - inset * 2, height - inset);
 
     try {
-      cv.grabCut(rgb, mask, rect, bgdModel, fgdModel, 5, cv.GC_INIT_WITH_RECT);
+      cv.grabCut(rgb, mask, rect, bgdModel, fgdModel, 8, cv.GC_INIT_WITH_RECT);
     } finally {
       rgba.delete();
       rgb.delete();
@@ -214,6 +384,14 @@ export function createCutoutService({ cacheDir = null, workWidth = WORK_WIDTH } 
     }
     mask.delete();
 
+    // Erode first, so a thin background bridge cannot keep a lamp or a chair attached to the
+    // subject. The largest eroded component is then dilated back to restore the real edge.
+    const eroded = erodeMask(foreground, width, height, 2);
+    const erodedHasSubject = eroded.some((value) => value === 1);
+    const detached = erodedHasSubject ? keepLargestComponent(eroded, width, height) : 0;
+    if (erodedHasSubject) {
+      foreground.set(dilateMask(eroded, width, height, 2));
+    }
     const filled = fillHoles(foreground, width, height);
     const removed = removeSpecks(foreground, width, height);
     const box = boundingBox(foreground, width, height);
@@ -255,6 +433,7 @@ export function createCutoutService({ cacheDir = null, workWidth = WORK_WIDTH } 
       pixels[offset + 2] = source.bitmap.data[offset + 2];
       pixels[offset + 3] = alpha.bitmap.data[offset + 3];
     }
+    decontaminateEdges(pixels, sourceWidth, sourceHeight, 3);
 
     // GrabCut ran on the reduced copy, so the bounding box is in work coordinates. Scale it
     // back to the prepared photo before cropping: using it directly would cut a slice of the
@@ -288,6 +467,7 @@ export function createCutoutService({ cacheDir = null, workWidth = WORK_WIDTH } 
       bbox: { x: cropX, y: cropY, width: cropWidth, height: cropHeight },
       method: 'grabcut',
       foreground_ratio: Number(foregroundRatio.toFixed(3)),
+      removed_detached: detached,
       filled_holes: filled,
       removed_specks: removed
     };

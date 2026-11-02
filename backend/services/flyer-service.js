@@ -240,12 +240,9 @@ export function createFlyerService({ interactionService, composeService, backgro
       count
     });
     const background = backgrounds.images[0] ?? null;
-    // The cut-out costs a couple of seconds, so it is only computed once a raster background
-    // exists: a gradient fallback keeps the framed photo treatment instead.
-    const photoForComposition =
-      typeof background?.image === 'string' && background.image.startsWith('data:image/')
-        ? await composeService.prepareCutout(preparedPhoto)
-        : preparedPhoto;
+    // The cut-out is always computed when a photo exists. The composer rasterises a gradient
+    // fallback when needed, so the subject is baked into one ground even without OpenRouter.
+    const photoForComposition = preparedPhoto === null ? null : await composeService.prepareCutout(preparedPhoto);
 
     const composition = await composeService.compose({
       userId,
@@ -332,10 +329,7 @@ export function createFlyerService({ interactionService, composeService, backgro
       background = backgrounds.images[index] ?? backgrounds.images[0] ?? null;
     }
 
-    const photoForComposition =
-      typeof background?.image === 'string' && background.image.startsWith('data:image/')
-        ? await composeService.prepareCutout(preparedPhoto)
-        : preparedPhoto;
+    const photoForComposition = preparedPhoto === null ? null : await composeService.prepareCutout(preparedPhoto);
 
     const composition = await composeService.compose({
       userId,

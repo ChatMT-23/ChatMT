@@ -1235,6 +1235,37 @@ test('a cut-out subject is baked into the generated background without a framed 
   assert.ok(result.svg_bytes > 1000);
 });
 
+test('a photo is cut out and baked into a fallback background too', async () => {
+  const response = await api('/api/design/flyer', {
+    method: 'POST',
+    body: {
+      userId: 'fallback-cutout-user',
+      text: 'A green flyer for a spring market',
+      image: await portraitPhotoDataUrl(),
+      consent: true,
+      design: {}
+    }
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.backgrounds.images[0].fallback, true);
+  const composition = response.body.composition;
+  assert.equal(composition.background.fallback, true);
+  assert.equal(composition.background.rasterized, true);
+  assert.equal(composition.background.composite, true);
+  assert.equal(
+    composition.photo.treatment,
+    'background removed, subject composited into the generated background'
+  );
+  assert.equal(composition.subject.composited, true);
+  assert.equal(composition.background.image, null, 'the composite is not sent twice');
+  assert.equal((composition.svg.match(/data:image\//g) ?? []).length, 1, 'the SVG holds one picture, not the old photo');
+  assert.match(composition.image, /^data:image\/jpeg;base64,/);
+  assert.equal(composition.image_width, 1080);
+  assert.equal(composition.image_height, 1350);
+  assert.equal(composition.image_error, null);
+});
+
 test('only red and yellow produce a question; every other colour stays question-free', async () => {
   for (const entry of PALETTE) {
     const response = await api('/api/interactions', {

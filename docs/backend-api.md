@@ -490,7 +490,7 @@ composizione è **deterministica**: stessi ingressi, stesso SVG.
 |---|---|
 | `layout` | `id` (`showcase`, `stack`, `band-right`, `cover`), etichetta, margine di sicurezza, `text_scale`, `headline_size`, `body_size`; per `showcase` anche `text_top`, `text_bottom`, `rule_y`, `text_overflow`, `text_trimmed`; con le righe opzionali anche `top_note_top`, `top_note_bottom`, `bottom_note_top`, `bottom_note_bottom` |
 | `copy` | `kicker`, `topText`, `headline`, `subhead`, `body`, `bottomText`, `footer`; se `design.text` è presente, la prima riga/frase diventa la headline e il resto il corpo |
-| `background` | `id`, `label`, `fallback`: lo sfondo generato usato dal composer, o `null`; con un soggetto composto contiene anche `composite: true` e `image: null` (l'immagine è già dentro l'SVG) |
+| `background` | `id`, `label`, `fallback`: lo sfondo generato usato dal composer, o `null`; con un soggetto composto contiene anche `composite: true` e `image: null` (l'immagine è già dentro l'SVG); se lo sfondo era un gradiente di fallback contiene `rasterized: true` e le dimensioni del raster usato per il compositing |
 | `photo` | dimensioni, `treatment`, `resized`, byte, `cutout` (`method`, dimensioni, `foreground_ratio`) e `cutout_reason`; `null` senza foto |
 | `subject` | presente solo quando il ritaglio è riuscito: `composited: true`, `method`, posizione (`x`, `y`, `bottom`) e dimensioni nel flyer |
 | `image` | il flyer rasterizzato in JPEG (`data:image/jpeg;base64,...`), pronto per la galleria del telefono; `null` se la rasterizzazione non è disponibile |
@@ -511,15 +511,20 @@ Regole:
   al prossimo ingaggio. La richiesta esplicita di uno sfondo rosso/giallo resta separata e
   continua a richiedere la ragione cogente;
 - con uno sfondo generato il layout è `showcase`: immagine full-bleed, scrim, testo; se c'è anche
-  una foto, lo sfondo originale viene rimosso con GrabCut e il soggetto viene impastato
-  nell'immagine dello sfondo (nessuna cornice, nessun riquadro). L'immagine risultante è un solo
-  JPEG dentro l'SVG;
+  una foto, lo sfondo originale viene rimosso con GrabCut, le componenti staccate dal soggetto
+  (finestre, lampade, mobili) vengono scartate e il soggetto viene impastato nell'immagine dello
+  sfondo (nessuna cornice, nessun riquadro). Anche il gradiente di fallback viene rasterizzato al
+  volo quando serve il compositing, quindi il flyer resta un unico fondo anche senza OpenRouter.
+  L'immagine risultante è un solo JPEG dentro l'SVG;
 - la foto passa dagli stessi limiti di `/api/design/transform` (byte, lato, pixel) e viene
   riportata a un massimo di 1600 px di larghezza in JPEG, senza cambiarne le proporzioni;
-- il ritaglio gira in locale con OpenCV (`400 px` di lavoro, 5 iterazioni): richiede circa 1–2
-  secondi, non consuma crediti del provider e non ridisegna i pixel del soggetto. Se non trova un
-  soggetto separabile (`cutout_reason: "no_subject"` / `"no_background"`), il composer torna alla
-  foto incorniciata invece di produrre un ritaglio rotto;
+- il ritaglio gira in locale con OpenCV (`400 px` di lavoro, 8 iterazioni): richiede qualche
+  secondo, non consuma crediti del provider e non ridisegna i pixel del soggetto. Dopo GrabCut
+  viene tenuta solo la componente principale, con un'erosione che stacca gli oggetti collegati al
+  soggetto e una dilatazione che ne ripristina il bordo; i pixel semitrasparenti del contorno
+  vengono riempiti con il colore del soggetto, così non resta l'alone dello sfondo precedente. Se
+  non trova un soggetto separabile (`cutout_reason: "no_subject"` / `"no_background"`), il
+  composer torna alla foto incorniciata invece di produrre un ritaglio rotto;
 - nessun testo è scritto in memoria: `stored` è `null`.
 
 - il testo è convertito in **tracciati di glifo** con `fontkit` e i font locali

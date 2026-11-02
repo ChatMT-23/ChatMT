@@ -108,6 +108,10 @@ backend and linked from GitHub, not repeated in the interface.
   image and a prompt built from the colour and a motif (botanical garden, village, chapel,
   meadow, arches). The user's flyer text is never sent to the image provider. Images are cached
   by model + prompt; without a key the service uses deterministic gradient fallbacks.
+- **The photo becomes part of the background.** When a photo is uploaded, its original
+  background is cut out with GrabCut, background objects detached from the subject are discarded,
+  and the subject is baked into the chosen background. This happens with gradient fallbacks too:
+  the flyer is always one ground, never a framed photo placed on top of a background.
 - **One observable contract.** The detailed studio page is kept at
   `frontend/studio.html` for reference and for the original 51 checks. The public page is
   `frontend/index.html` with `css/create.css` and `js/create.js`.

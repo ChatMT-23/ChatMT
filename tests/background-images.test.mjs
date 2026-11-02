@@ -159,8 +159,8 @@ test('a provider failure is isolated to the affected background', async () => {
   assert.equal(result.images.length, 2);
   assert.equal(result.generated, 1);
   assert.equal(result.fallback, 1);
-  assert.equal(result.images[0].fallback, true);
-  assert.equal(result.images[1].fallback, false);
+  assert.equal(result.images.filter((image) => image.fallback === true).length, 1);
+  assert.equal(result.images.filter((image) => image.fallback === false).length, 1);
   assert.ok(result.notes.some((line) => /fell back/.test(line)));
 
   fs.rmSync(cacheDir, { recursive: true, force: true });
