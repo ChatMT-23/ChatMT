@@ -301,7 +301,11 @@ export function createRequestHandler(config = loadConfig()) {
         composition.compose({
           userId: userIdFrom(String(body.userId ?? '')),
           colour: body.colour ?? { name: body.colourName, hex: body.hex },
-          design: body.design,
+          design: {
+            ...(body.design ?? {}),
+            ...(body.topText === undefined ? {} : { topText: body.topText }),
+            ...(body.bottomText === undefined ? {} : { bottomText: body.bottomText })
+          },
           image: body.image ?? null,
           variant: body.variant
         })
@@ -313,6 +317,8 @@ export function createRequestHandler(config = loadConfig()) {
         flyers.create({
           userId: userIdFrom(String(body.userId ?? '')),
           text: body.text,
+          topText: body.topText,
+          bottomText: body.bottomText,
           image: body.image ?? null,
           consent: body.consent,
           design: body.design ?? {}
@@ -325,6 +331,8 @@ export function createRequestHandler(config = loadConfig()) {
         flyers.recompose({
           userId: userIdFrom(String(body.userId ?? '')),
           text: body.text,
+          topText: body.topText,
+          bottomText: body.bottomText,
           colourName: body.colourName ?? body.colour?.name,
           image: body.image ?? null,
           design: body.design ?? {},

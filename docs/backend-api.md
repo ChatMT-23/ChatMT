@@ -467,18 +467,26 @@ preme una volta e non ritaglia e non scrive nulla.
 {
   "userId": "local-user",
   "colour": { "name": "blue" },
-  "design": { "type": "banner", "subject": "Jazz night", "audience": "Students" },
+  "design": {
+    "type": "banner",
+    "subject": "Jazz night",
+    "audience": "Students",
+    "topText": "Save the date",
+    "bottomText": "Doors 8pm"
+  },
   "image": "data:image/png;base64,..."
 }
 ```
 
 `image` è opzionale: senza foto la cornice viene riempita da un campo geometrico costruito sul
-colore. La composizione è **deterministica**: stessi ingressi, stesso SVG.
+colore. `design.topText` e `design.bottomText` sono opzionali (massimo 200 caratteri ciascuno):
+vengono disegnati rispettivamente sul bordo alto e sul bordo basso, senza cambiare il resto
+dell'impaginazione. La composizione è **deterministica**: stessi ingressi, stesso SVG.
 
 | Campo della risposta | Contenuto |
 |---|---|
-| `layout` | `id` (`showcase`, `stack`, `band-right`, `cover`), etichetta, margine di sicurezza; per `showcase` anche `text_top`, `text_bottom`, `rule_y`, `text_overflow`, `text_trimmed` |
-| `copy` | `kicker`, `headline`, `subhead`, `body`, `footer`; se `design.text` è presente, la prima riga/frase diventa la headline e il resto il corpo |
+| `layout` | `id` (`showcase`, `stack`, `band-right`, `cover`), etichetta, margine di sicurezza; per `showcase` anche `text_top`, `text_bottom`, `rule_y`, `text_overflow`, `text_trimmed`; con le righe opzionali anche `top_note_top`, `top_note_bottom`, `bottom_note_top`, `bottom_note_bottom` |
+| `copy` | `kicker`, `topText`, `headline`, `subhead`, `body`, `bottomText`, `footer`; se `design.text` è presente, la prima riga/frase diventa la headline e il resto il corpo |
 | `background` | `id`, `label`, `fallback`: lo sfondo generato usato dal composer, o `null`; con un soggetto composto contiene anche `composite: true` e `image: null` (l'immagine è già dentro l'SVG) |
 | `photo` | dimensioni, `treatment`, `resized`, byte, `cutout` (`method`, dimensioni, `foreground_ratio`) e `cutout_reason`; `null` senza foto |
 | `subject` | presente solo quando il ritaglio è riuscito: `composited: true`, `method`, posizione (`x`, `y`, `bottom`) e dimensioni nel flyer |
@@ -535,6 +543,8 @@ Il composer pubblico. Richiesta:
 {
   "userId": "local-user",
   "text": "A yellow flyer for a road-safety warning. Headline: “Slow down.”",
+  "topText": "Save the date",
+  "bottomText": "Town Hall Square · Free entry",
   "image": "data:image/png;base64,...",
   "consent": true,
   "design": {}
@@ -544,6 +554,9 @@ Il composer pubblico. Richiesta:
 - `text` è obbligatorio (1–800 caratteri): viene usato come copy del flyer e, per rosso/giallo,
   come base della valutazione della ragione dopo la rimozione dei termini generici dell'artefatto
   (`flyer`, `poster`, `banner`, `design`, `layout`, `background`, `theme`, `branding`, ecc.).
+- `topText` e `bottomText` sono opzionali (massimo 200 caratteri ciascuno): vengono disegnati sul
+  bordo alto e sul bordo basso del flyer, sopra lo sfondo e senza toccare headline, corpo, foto o
+  piè di pagina. Un valore assente o vuoto lascia la composizione esattamente com'era.
 - Il colore è il primo nome della palette nel testo (o un HEX), altrimenti `blue`; il formato è
   inferito da `banner`, `poster`, `instagram`/`social media`/`social post`, `background`/
   `wallpaper`/`desktop`, altrimenti `flyer`. La parola “square” da sola non basta più: “Town Hall
@@ -577,6 +590,8 @@ nulla:
 {
   "userId": "local-user",
   "text": "A yellow flyer",
+  "topText": "Save the date",
+  "bottomText": "Town Hall Square · Free entry",
   "colourName": "yellow",
   "design": { "type": "flyer" },
   "image": "data:image/png;base64,...",

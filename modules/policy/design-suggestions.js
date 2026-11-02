@@ -150,7 +150,7 @@ function optionalText(value, field, maximum = 200) {
 }
 
 /**
- * @param {{type?: string, subject?: string, audience?: string, text?: string}} [design]
+ * @param {{type?: string, subject?: string, audience?: string, text?: string, topText?: string, bottomText?: string}} [design]
  */
 export function normaliseDesignContext(design = {}) {
   const type = String(design?.type ?? 'flyer').trim().toLowerCase();
@@ -166,7 +166,9 @@ export function normaliseDesignContext(design = {}) {
     height: DESIGN_TYPES[type].height,
     subject: optionalText(design?.subject, 'subject'),
     audience: optionalText(design?.audience, 'audience'),
-    text: optionalText(design?.text, 'text', 800)
+    text: optionalText(design?.text, 'text', 800),
+    topText: optionalText(design?.topText, 'topText'),
+    bottomText: optionalText(design?.bottomText, 'bottomText')
   });
 }
 

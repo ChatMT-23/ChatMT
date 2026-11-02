@@ -404,11 +404,25 @@ async function main() {
     await waitForValue("document.querySelectorAll('#flyer-text').length", 1);
 
     assert((await count('#flyer-text')) === 1, 'the simple page has the text box');
+    assert((await count('#flyer-top-text')) === 1, 'the simple page has the top text box');
+    assert((await count('#flyer-bottom-text')) === 1, 'the simple page has the bottom text box');
     assert((await count('#create-flyer')) === 1, 'the simple page has one create button');
     assert((await text('.rules-link')).includes('Rules on GitHub'), 'the rules link is on the page');
     assert((await hidden('#result')) === true, 'the result is hidden before the first creation');
 
+    await evaluate(`(() => {
+      const original = window.fetch;
+      window.__lastFlyerBody = null;
+      window.fetch = (url, options) => {
+        if (String(url).endsWith('/api/design/flyer')) window.__lastFlyerBody = options?.body ?? null;
+        return original(url, options);
+      };
+      return true;
+    })()`);
+
     await setValue('#flyer-text', 'A yellow flyer');
+    await setValue('#flyer-top-text', 'Save the date');
+    await setValue('#flyer-bottom-text', 'Town Hall Square');
     await click('#consent');
     const simpleStartedAt = Date.now();
     await click('#create-flyer');
@@ -420,6 +434,11 @@ async function main() {
       'the simple page shows the reduced assistance'
     );
     assert((await hidden('#flyer-preview')) === false, 'the flyer preview is visible');
+    const sentBody = await evaluate('window.__lastFlyerBody');
+    assert(sentBody !== null, 'the create request was observed');
+    const sent = JSON.parse(sentBody);
+    assert(sent.topText === 'Save the date', 'the top text is sent to the backend');
+    assert(sent.bottomText === 'Town Hall Square', 'the bottom text is sent to the backend');
     assert((await text('#download')).includes('JPG'), 'the download is offered as a JPG');
     assert(
       (await evaluate("document.querySelector('#download').download")).endsWith('.jpg'),

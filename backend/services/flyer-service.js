@@ -14,6 +14,7 @@ import { badRequest } from '../errors.js';
 import { DESIGN_TYPES, normaliseDesignContext } from '../../modules/policy/design-suggestions.js';
 
 export const MAX_FLYER_TEXT = 800;
+export const MAX_NOTE_TEXT = 200;
 
 const COLOUR_ALIASES = Object.freeze({
   gray: 'grey',
@@ -110,6 +111,19 @@ function validateText(text) {
   return text.trim();
 }
 
+/** The two optional lines above and below the flyer: absent means "leave the layout as it is". */
+function validateNote(value, field) {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string') {
+    throw badRequest(`${field}_not_text`, `The ${field} must be a string when present.`);
+  }
+  const trimmed = value.trim();
+  if (trimmed.length > MAX_NOTE_TEXT) {
+    throw badRequest(`${field}_too_long`, `The ${field} is longer than ${MAX_NOTE_TEXT} characters.`);
+  }
+  return trimmed === '' ? null : trimmed;
+}
+
 function resolvePaletteColour(palette, colourName) {
   const wanted = String(colourName ?? '').trim().toLowerCase();
   const entry = palette.find((candidate) => candidate.name === wanted);
@@ -143,13 +157,15 @@ export function createFlyerService({ interactionService, composeService, backgro
     throw new TypeError('The flyer service needs the palette.');
   }
 
-  function contextFor({ text, design }) {
+  function contextFor({ text, design, topText, bottomText }) {
     const type = Object.hasOwn(DESIGN_TYPES, String(design?.type ?? '')) ? design.type : inferDesignType(text);
     return normaliseDesignContext({
       type,
       text,
       subject: design?.subject,
-      audience: design?.audience
+      audience: design?.audience,
+      topText: topText === undefined ? design?.topText : topText,
+      bottomText: bottomText === undefined ? design?.bottomText : bottomText
     });
   }
 
@@ -166,10 +182,12 @@ export function createFlyerService({ interactionService, composeService, backgro
     };
   }
 
-  async function create({ userId, text, image = null, consent = false, design = {} } = {}) {
+  async function create({ userId, text, topText, bottomText, image = null, consent = false, design = {} } = {}) {
     const cleanText = validateText(text);
+    const cleanTop = validateNote(topText === undefined ? design?.topText : topText, 'topText');
+    const cleanBottom = validateNote(bottomText === undefined ? design?.bottomText : bottomText, 'bottomText');
     const colour = inferColour(cleanText, palette);
-    const context = contextFor({ text: cleanText, design });
+    const context = contextFor({ text: cleanText, design, topText: cleanTop, bottomText: cleanBottom });
     // Validate the photo before the interaction: a bad image must not store a preference.
     const preparedPhoto = await composeService.prepareImage(image);
 
@@ -208,6 +226,8 @@ export function createFlyerService({ interactionService, composeService, backgro
     return {
       userId,
       text: cleanText,
+      topText: context.topText,
+      bottomText: context.bottomText,
       input: {
         colourName: colour.entry.name,
         hex: colour.entry.hex,
@@ -236,6 +256,8 @@ export function createFlyerService({ interactionService, composeService, backgro
   async function recompose({
     userId,
     text,
+    topText,
+    bottomText,
     colourName,
     image = null,
     design = {},
@@ -244,8 +266,10 @@ export function createFlyerService({ interactionService, composeService, backgro
     count = 5
   } = {}) {
     const cleanText = validateText(text);
+    const cleanTop = validateNote(topText === undefined ? design?.topText : topText, 'topText');
+    const cleanBottom = validateNote(bottomText === undefined ? design?.bottomText : bottomText, 'bottomText');
     const entry = resolvePaletteColour(palette, colourName);
-    const context = contextFor({ text: cleanText, design });
+    const context = contextFor({ text: cleanText, design, topText: cleanTop, bottomText: cleanBottom });
     const preparedPhoto = await composeService.prepareImage(image);
     const requestedCount = Math.max(1, Math.min(5, Number.isInteger(count) ? count : 5));
 
@@ -283,6 +307,8 @@ export function createFlyerService({ interactionService, composeService, backgro
     return {
       userId,
       text: cleanText,
+      topText: context.topText,
+      bottomText: context.bottomText,
       input: { colourName: entry.name, hex: entry.hex },
       design: context,
       backgrounds: clientBackgrounds(backgrounds),

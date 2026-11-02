@@ -380,6 +380,73 @@ test('a generated background is placed full-bleed in the showcase layout', () =>
   assert.match(result.svg, /Spring fair/);
 });
 
+test('the optional lines above and below sit at the two edges without touching the copy', () => {
+  const backgroundImage = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
+  const result = composeDesign({
+    meanings,
+    colourName: 'blue',
+    design: {
+      type: 'flyer',
+      text: 'Jazz night\nDoors 8pm · Town Hall',
+      topText: 'Save the date',
+      bottomText: 'Tickets at the door'
+    },
+    backgroundImage
+  });
+
+  assert.equal(result.layout.id, 'showcase');
+  assert.equal(result.copy.topText, 'Save the date');
+  assert.equal(result.copy.bottomText, 'Tickets at the door');
+  assert.equal(result.copy.headline, 'Jazz night');
+  assert.equal(result.copy.body, 'Doors 8pm · Town Hall');
+  assert.ok(result.layout.top_note_top >= 0);
+  assert.ok(result.layout.bottom_note_top > result.layout.text_bottom);
+  assert.ok(result.layout.bottom_note_top < result.layout.rule_y);
+  assert.match(result.svg, /<desc>Save the date/);
+  assert.match(result.svg, /Tickets at the door/);
+  assert.ok(result.actions.some((line) => /top edge/.test(line)));
+  assert.ok(result.actions.some((line) => /above the footer/.test(line)));
+});
+
+test('the optional lines fit the stacked layout above the footer rule', () => {
+  const result = composeDesign({
+    meanings,
+    colourName: 'green',
+    design: {
+      type: 'flyer',
+      text: 'Spring fair\nSaturday 10:00-18:00',
+      topText: 'Save the date',
+      bottomText: 'Town Hall Square'
+    }
+  });
+
+  assert.equal(result.layout.id, 'stack');
+  assert.ok(result.layout.top_note_top >= 0);
+  assert.ok(result.layout.text_bottom < result.layout.bottom_note_top);
+  assert.ok(result.layout.bottom_note_top < result.layout.rule_y);
+  assert.equal(result.layout.text_overflow, false);
+  assert.match(result.svg, /Town Hall Square/);
+});
+
+test('the optional lines fit the square layout above the bottom edge', () => {
+  const result = composeDesign({
+    meanings,
+    colourName: 'orange',
+    design: {
+      type: 'social_post',
+      text: 'Launch night',
+      topText: 'New season',
+      bottomText: 'Doors 8pm'
+    },
+    photo: PHOTO
+  });
+
+  assert.equal(result.layout.id, 'cover');
+  assert.ok(result.layout.text_bottom < result.layout.bottom_note_top);
+  assert.match(result.svg, /New season/);
+  assert.match(result.svg, /Doors 8pm/);
+});
+
 test('red and yellow compose without a recorded cogent reason, with the reduced assistance', () => {
   const result = composeDesign({ meanings, colourName: 'red', design: { type: 'flyer' } });
   assert.equal(result.colour.colour_name, 'red');

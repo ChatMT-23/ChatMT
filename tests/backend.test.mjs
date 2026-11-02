@@ -1099,6 +1099,65 @@ test('the one-press flyer infers the colour and composes red/yellow without refu
   );
 });
 
+test('the optional text above and below the flyer is accepted and composed at the two edges', async () => {
+  const response = await api('/api/design/flyer', {
+    method: 'POST',
+    body: {
+      userId: 'note-flyer-user',
+      text: 'Community market\nSaturday 10:00-18:00, Town Hall Square',
+      topText: 'Save the date',
+      bottomText: 'Free entry · All welcome',
+      consent: true
+    }
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.topText, 'Save the date');
+  assert.equal(response.body.bottomText, 'Free entry · All welcome');
+  assert.equal(response.body.design.topText, 'Save the date');
+  assert.equal(response.body.design.bottomText, 'Free entry · All welcome');
+  assert.equal(response.body.composition.copy.topText, 'Save the date');
+  assert.equal(response.body.composition.copy.bottomText, 'Free entry · All welcome');
+  assert.ok(response.body.composition.layout.top_note_top >= 0);
+  assert.ok(response.body.composition.layout.bottom_note_top > response.body.composition.layout.text_bottom);
+  assert.ok(response.body.composition.layout.bottom_note_top < response.body.composition.layout.rule_y);
+  assert.equal(response.body.composition.layout.text_overflow, false);
+  assert.match(response.body.composition.svg, /Save the date/);
+  assert.match(response.body.composition.svg, /Free entry · All welcome/);
+
+  const recomposed = await api('/api/design/recompose', {
+    method: 'POST',
+    body: {
+      userId: 'note-flyer-user',
+      text: 'Community market\nSaturday 10:00-18:00, Town Hall Square',
+      topText: 'Save the date',
+      bottomText: 'Free entry · All welcome',
+      colourName: 'blue',
+      backgroundIndex: 0,
+      count: 1
+    }
+  });
+  assert.equal(recomposed.status, 200);
+  assert.equal(recomposed.body.topText, 'Save the date');
+  assert.equal(recomposed.body.bottomText, 'Free entry · All welcome');
+  assert.equal(recomposed.body.composition.copy.topText, 'Save the date');
+  assert.equal(recomposed.body.composition.copy.bottomText, 'Free entry · All welcome');
+
+  const tooLong = await api('/api/design/flyer', {
+    method: 'POST',
+    body: { userId: 'note-flyer-user', text: 'A blue flyer', topText: 'x'.repeat(201) }
+  });
+  assert.equal(tooLong.status, 400);
+  assert.equal(tooLong.body.error.code, 'topText_too_long');
+
+  const notText = await api('/api/design/flyer', {
+    method: 'POST',
+    body: { userId: 'note-flyer-user', text: 'A blue flyer', bottomText: 42 }
+  });
+  assert.equal(notText.status, 400);
+  assert.equal(notText.body.error.code, 'bottomText_not_text');
+});
+
 test('the cut-out removes the original background and keeps the subject opaque', async () => {
   const service = createCutoutService();
   const result = await service.removeBackground({ image: await portraitPhotoDataUrl() });

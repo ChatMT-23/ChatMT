@@ -218,9 +218,11 @@ function buildCopy({ colourName, entry, context }) {
         .join(' ');
   return {
     kicker: `chatmt · ${context.label}`,
+    topText: context.topText,
     headline,
     subhead,
     body,
+    bottomText: context.bottomText,
     footer: `${colourName} · ${entry.hex} · ${context.width}×${context.height}`
   };
 }
@@ -304,6 +306,53 @@ function textLines({ lines, x, y, lineHeight, size, fill, font, weight = 400, sp
       })
     )
     .join('');
+}
+
+/**
+ * The optional lines written by the user above and below the flyer. They are set in the mono
+ * face so they read as notes, and measured with the same glyph engine as the rest of the copy.
+ */
+function buildNoteBlock(text, { size, maxWidth, spacing = 0 }) {
+  const lines = wrapToWidth(text, TYPEFACES.monoBold, size, maxWidth, spacing);
+  const lineHeight = Math.round(size * 1.4);
+  return {
+    lines,
+    size,
+    lineHeight,
+    spacing,
+    height: size + (lines.length - 1) * lineHeight
+  };
+}
+
+function noteLayer({ note, x, firstBaseline, fill }) {
+  return textLines({
+    lines: note.lines,
+    x,
+    y: firstBaseline,
+    lineHeight: note.lineHeight,
+    size: note.size,
+    fill,
+    font: FONTS.mono,
+    weight: 700,
+    spacing: note.spacing
+  });
+}
+
+/** A soft dark wash at the top, used only when a user line has to sit over a picture. */
+function topNoteScrim({ width, height, id }) {
+  return scrimLayer({
+    x: 0,
+    y: 0,
+    width,
+    height,
+    colour: '#10161a',
+    id,
+    stops: [
+      { offset: 0, opacity: 0.86 },
+      { offset: 0.55, opacity: 0.62 },
+      { offset: 1, opacity: 0 }
+    ]
+  });
 }
 
 function geometricField({ x, y, width, height, colour, id }) {
@@ -394,18 +443,6 @@ export function composeDesign({
       })
     );
 
-    if (photo !== null && !hasSubject) {
-      const insetX = margin;
-      const insetY = margin;
-      const insetW = width - margin * 2;
-      const insetH = round(height * 0.38);
-      parts.push(photoLayer({ photo, x: insetX, y: insetY, width: insetW, height: insetH, id: 'inset' }));
-      parts.push(
-        `<rect x="${insetX}" y="${insetY}" width="${insetW}" height="${insetH}" fill="none" ` +
-          `stroke="#fbf8f1" stroke-width="${Math.max(3, round(width * 0.006))}" opacity="0.92"/>`
-      );
-    }
-
     const ink = '#fbf8f1';
     const textTop = hasSubject
       ? Math.max(round(height * 0.62), round(subject.bottom + height * 0.025))
@@ -423,8 +460,22 @@ export function composeDesign({
     let bodySize = Math.max(15, round(Math.min(30, headlineSize * 0.36)));
     const kickerSize = Math.max(11, round(bodySize * 0.72));
     const footerSize = kickerSize;
+    const noteSize = Math.max(12, round(kickerSize * 1.05));
+    const noteSpacing = Math.max(0, round(noteSize * 0.05));
+    const noteGap = Math.round(noteSize * 0.85);
+    const topNote =
+      copy.topText === null
+        ? null
+        : buildNoteBlock(copy.topText, { size: noteSize, maxWidth: columnWidth, spacing: noteSpacing });
+    const bottomNote =
+      copy.bottomText === null
+        ? null
+        : buildNoteBlock(copy.bottomText, { size: noteSize, maxWidth: columnWidth, spacing: noteSpacing });
     const ruleY = height - margin * 1.45;
-    const available = ruleY - textTop;
+    const bottomNoteTop =
+      bottomNote === null ? null : round(ruleY - noteGap - bottomNote.height - noteSize * 0.05);
+    const textLimit = bottomNoteTop === null ? ruleY : bottomNoteTop - noteGap;
+    const available = textLimit - textTop;
     let headlineLines = wrapToWidth(copy.headline, TYPEFACES.display, headlineSize, columnWidth);
     let bodyLines = wrapToWidth(copy.body, TYPEFACES.body, bodySize, columnWidth);
     let textTrimmed = false;
@@ -463,8 +514,38 @@ export function composeDesign({
     layoutMetrics.text_top = textTop;
     layoutMetrics.text_bottom = round(textBottom);
     layoutMetrics.rule_y = round(ruleY);
-    layoutMetrics.text_overflow = textBottom > ruleY - 2;
+    layoutMetrics.text_overflow = textBottom > textLimit - 2;
     layoutMetrics.text_trimmed = textTrimmed;
+    if (topNote !== null) {
+      layoutMetrics.top_note_top = margin;
+      layoutMetrics.top_note_bottom = round(margin + topNote.height);
+    }
+    if (bottomNote !== null) {
+      layoutMetrics.bottom_note_top = bottomNoteTop;
+      layoutMetrics.bottom_note_bottom = round(bottomNoteTop + bottomNote.height);
+    }
+
+    if (photo !== null && !hasSubject) {
+      const insetX = margin;
+      const insetY = margin;
+      const insetW = width - margin * 2;
+      const insetH = round(height * 0.38);
+      parts.push(photoLayer({ photo, x: insetX, y: insetY, width: insetW, height: insetH, id: 'inset' }));
+      parts.push(
+        `<rect x="${insetX}" y="${insetY}" width="${insetW}" height="${insetH}" fill="none" ` +
+          `stroke="#fbf8f1" stroke-width="${Math.max(3, round(width * 0.006))}" opacity="0.92"/>`
+      );
+    }
+
+    if (topNote !== null) {
+      parts.push(
+        topNoteScrim({
+          width,
+          height: round(margin + topNote.height + noteSize * 0.9),
+          id: 'top-note'
+        })
+      );
+    }
 
     parts.push(
       textLines({
@@ -500,6 +581,16 @@ export function composeDesign({
         font: FONTS.body
       })
     );
+    if (bottomNote !== null) {
+      parts.push(
+        noteLayer({
+          note: bottomNote,
+          x: margin,
+          firstBaseline: bottomNoteTop + Math.round(noteSize * 0.8),
+          fill: ink
+        })
+      );
+    }
     parts.push(
       `<rect x="${margin}" y="${round(ruleY)}" width="${round(width - margin * 2)}" height="1" fill="${ink}" opacity="0.3"/>` +
         textLines({
@@ -516,6 +607,16 @@ export function composeDesign({
       `<rect x="${round(margin * 0.45)}" y="${round(margin * 0.45)}" width="${round(width - margin * 0.9)}" ` +
         `height="${round(height - margin * 0.9)}" fill="none" stroke="${ink}" stroke-width="1.5" opacity="0.5"/>`
     );
+    if (topNote !== null) {
+      parts.push(
+        noteLayer({
+          note: topNote,
+          x: margin,
+          firstBaseline: margin + Math.round(noteSize * 0.8),
+          fill: ink
+        })
+      );
+    }
 
     actions.push(
       hasSubject
@@ -536,7 +637,45 @@ export function composeDesign({
     const columnWidth = width - margin * 2;
     const subtitle = copy.subhead === null ? [] : [copy.subhead];
     const headlineLines = wrapToWidth(copy.headline, TYPEFACES.display, headlineSize, columnWidth);
-    const bodyLines = wrapToWidth(copy.body, TYPEFACES.body, bodySize, columnWidth);
+    let bodyLines = wrapToWidth(copy.body, TYPEFACES.body, bodySize, columnWidth);
+    let stackBodySize = bodySize;
+    const noteSize = Math.max(12, round(kickerSize * 1.05));
+    const noteSpacing = Math.max(0, round(noteSize * 0.05));
+    const noteGap = Math.round(noteSize * 0.85);
+    const topNote =
+      copy.topText === null
+        ? null
+        : buildNoteBlock(copy.topText, { size: noteSize, maxWidth: columnWidth, spacing: noteSpacing });
+    const bottomNote =
+      copy.bottomText === null
+        ? null
+        : buildNoteBlock(copy.bottomText, { size: noteSize, maxWidth: columnWidth, spacing: noteSpacing });
+    const footerRuleY = height - margin * 1.5;
+    const bottomNoteTop =
+      bottomNote === null ? null : round(footerRuleY - noteGap - bottomNote.height - noteSize * 0.05);
+    const textLimit = bottomNoteTop === null ? footerRuleY : bottomNoteTop - noteGap;
+    const headlineTop = contentTop + kickerSize * 2.4 + headlineSize;
+    const afterHeadline = headlineTop + (headlineLines.length - 1) * headlineSize * 1.08;
+    const bodyBaseline = () => afterHeadline + stackBodySize * (subtitle.length === 0 ? 1.9 : 3.6);
+    const bodyBottom = () =>
+      bodyBaseline() +
+      Math.max(0, bodyLines.length - 1) * Math.round(stackBodySize * 1.5) +
+      stackBodySize * 0.25;
+    let textTrimmed = false;
+
+    if (bottomNote !== null) {
+      while (stackBodySize > 11 && bodyBottom() > textLimit) {
+        stackBodySize -= 1;
+        bodyLines = wrapToWidth(copy.body, TYPEFACES.body, stackBodySize, columnWidth);
+      }
+      while (bodyLines.length > 1 && bodyBottom() > textLimit) {
+        bodyLines.pop();
+        textTrimmed = true;
+      }
+      if (textTrimmed) {
+        bodyLines[bodyLines.length - 1] = `${bodyLines[bodyLines.length - 1].replace(/[.,;:]$/, '')}\u2026`;
+      }
+    }
 
     parts.push(`<rect width="${width}" height="${height}" fill="${entry.hex}"/>`);
     parts.push(
@@ -545,6 +684,15 @@ export function composeDesign({
             scrimLayer({ x: 0, y: round(photoHeight * 0.55), width, height: round(photoHeight * 0.45), colour: entry.hex, id: 'main' })
         : geometricField({ x: 0, y: 0, width, height: photoHeight, colour: entry.hex, id: 'main' })
     );
+    if (topNote !== null && photo !== null) {
+      parts.push(
+        topNoteScrim({
+          width,
+          height: round(margin + topNote.height + noteSize * 0.9),
+          id: 'top-note-stack'
+        })
+      );
+    }
     parts.push(
       textLines({
         lines: [copy.kicker.toUpperCase()],
@@ -561,21 +709,20 @@ export function composeDesign({
       textLines({
         lines: headlineLines,
         x: margin,
-        y: contentTop + kickerSize * 2.4 + headlineSize,
+        y: headlineTop,
         lineHeight: round(headlineSize * 1.08),
         size: headlineSize,
         fill: ink,
         font: FONTS.display
       })
     );
-    const afterHeadline = contentTop + kickerSize * 2.4 + headlineSize + (headlineLines.length - 1) * headlineSize * 1.08;
     parts.push(
       textLines({
         lines: subtitle,
         x: margin,
-        y: afterHeadline + bodySize * 1.9,
-        lineHeight: round(bodySize * 1.4),
-        size: bodySize,
+        y: afterHeadline + stackBodySize * 1.9,
+        lineHeight: round(stackBodySize * 1.4),
+        size: stackBodySize,
         fill: ink,
         font: FONTS.body,
         weight: 700
@@ -585,15 +732,38 @@ export function composeDesign({
       textLines({
         lines: bodyLines,
         x: margin,
-        y: afterHeadline + bodySize * (subtitle.length === 0 ? 1.9 : 3.6),
-        lineHeight: round(bodySize * 1.5),
-        size: bodySize,
+        y: bodyBaseline(),
+        lineHeight: round(stackBodySize * 1.5),
+        size: stackBodySize,
         fill: ink,
         font: FONTS.body
       })
     );
+    if (bottomNote !== null) {
+      parts.push(
+        noteLayer({
+          note: bottomNote,
+          x: margin,
+          firstBaseline: bottomNoteTop + Math.round(noteSize * 0.8),
+          fill: ink
+        })
+      );
+      layoutMetrics.text_top = contentTop;
+      layoutMetrics.text_bottom = round(bodyBottom());
+      layoutMetrics.rule_y = round(footerRuleY);
+      layoutMetrics.text_overflow = bodyBottom() > textLimit - 2;
+      layoutMetrics.text_trimmed = textTrimmed;
+    }
+    if (topNote !== null) {
+      layoutMetrics.top_note_top = margin;
+      layoutMetrics.top_note_bottom = round(margin + topNote.height);
+    }
+    if (bottomNote !== null) {
+      layoutMetrics.bottom_note_top = bottomNoteTop;
+      layoutMetrics.bottom_note_bottom = round(bottomNoteTop + bottomNote.height);
+    }
     parts.push(
-      `<rect x="${margin}" y="${height - margin * 1.5}" width="${round(width - margin * 2)}" height="1" fill="${ink}" opacity="0.35"/>` +
+      `<rect x="${margin}" y="${round(footerRuleY)}" width="${round(width - margin * 2)}" height="1" fill="${ink}" opacity="0.35"/>` +
         textLines({
           lines: [copy.footer],
           x: margin,
@@ -604,6 +774,16 @@ export function composeDesign({
           font: FONTS.mono
         })
     );
+    if (topNote !== null) {
+      parts.push(
+        noteLayer({
+          note: topNote,
+          x: margin,
+          firstBaseline: margin + Math.round(noteSize * 0.8),
+          fill: photo === null ? ink : '#fbf8f1'
+        })
+      );
+    }
 
     actions.push(
       photo !== null
@@ -618,8 +798,46 @@ export function composeDesign({
     const photoX = bandWidth;
     const columnWidth = bandWidth - margin * 2;
     const headlineLines = wrapToWidth(copy.headline, TYPEFACES.display, headlineSize, columnWidth);
-    const bodyLines = wrapToWidth(copy.body, TYPEFACES.body, bodySize, columnWidth);
+    let bodyLines = wrapToWidth(copy.body, TYPEFACES.body, bodySize, columnWidth);
+    let bandBodySize = bodySize;
     const subtitle = copy.subhead === null ? [] : [copy.subhead];
+    const noteSize = Math.max(12, round(kickerSize * 1.05));
+    const noteSpacing = Math.max(0, round(noteSize * 0.05));
+    const noteGap = Math.round(noteSize * 0.85);
+    const topNote =
+      copy.topText === null
+        ? null
+        : buildNoteBlock(copy.topText, { size: noteSize, maxWidth: columnWidth, spacing: noteSpacing });
+    const bottomNote =
+      copy.bottomText === null
+        ? null
+        : buildNoteBlock(copy.bottomText, { size: noteSize, maxWidth: columnWidth, spacing: noteSpacing });
+    const footerTop = height - margin - round(footerSize * 1.3);
+    const bottomNoteTop =
+      bottomNote === null ? null : round(footerTop - noteGap - bottomNote.height - noteSize * 0.05);
+    const textLimit = bottomNoteTop === null ? footerTop : bottomNoteTop - noteGap;
+    const headlineTop = round(height * 0.42);
+    const afterHeadline = headlineTop + (headlineLines.length - 1) * headlineSize * 1.08;
+    const bodyBaseline = () => afterHeadline + bandBodySize * (subtitle.length === 0 ? 1.9 : 3.6);
+    const bodyBottom = () =>
+      bodyBaseline() +
+      Math.max(0, bodyLines.length - 1) * Math.round(bandBodySize * 1.5) +
+      bandBodySize * 0.25;
+    let textTrimmed = false;
+
+    if (bottomNote !== null) {
+      while (bandBodySize > 11 && bodyBottom() > textLimit) {
+        bandBodySize -= 1;
+        bodyLines = wrapToWidth(copy.body, TYPEFACES.body, bandBodySize, columnWidth);
+      }
+      while (bodyLines.length > 1 && bodyBottom() > textLimit) {
+        bodyLines.pop();
+        textTrimmed = true;
+      }
+      if (textTrimmed) {
+        bodyLines[bodyLines.length - 1] = `${bodyLines[bodyLines.length - 1].replace(/[.,;:]$/, '')}\u2026`;
+      }
+    }
 
     parts.push(`<rect width="${width}" height="${height}" fill="${entry.hex}"/>`);
     parts.push(
@@ -644,21 +862,20 @@ export function composeDesign({
       textLines({
         lines: headlineLines,
         x: margin,
-        y: round(height * 0.42),
+        y: headlineTop,
         lineHeight: round(headlineSize * 1.08),
         size: headlineSize,
         fill: ink,
         font: FONTS.display
       })
     );
-    const afterHeadline = round(height * 0.42) + (headlineLines.length - 1) * headlineSize * 1.08;
     parts.push(
       textLines({
         lines: subtitle,
         x: margin,
-        y: afterHeadline + bodySize * 1.9,
-        lineHeight: round(bodySize * 1.4),
-        size: bodySize,
+        y: afterHeadline + bandBodySize * 1.9,
+        lineHeight: round(bandBodySize * 1.4),
+        size: bandBodySize,
         fill: ink,
         font: FONTS.body,
         weight: 700
@@ -668,13 +885,35 @@ export function composeDesign({
       textLines({
         lines: bodyLines,
         x: margin,
-        y: afterHeadline + bodySize * (subtitle.length === 0 ? 1.9 : 3.6),
-        lineHeight: round(bodySize * 1.5),
-        size: bodySize,
+        y: bodyBaseline(),
+        lineHeight: round(bandBodySize * 1.5),
+        size: bandBodySize,
         fill: ink,
         font: FONTS.body
       })
     );
+    if (bottomNote !== null) {
+      parts.push(
+        noteLayer({
+          note: bottomNote,
+          x: margin,
+          firstBaseline: bottomNoteTop + Math.round(noteSize * 0.8),
+          fill: ink
+        })
+      );
+      layoutMetrics.text_top = headlineTop;
+      layoutMetrics.text_bottom = round(bodyBottom());
+      layoutMetrics.text_overflow = bodyBottom() > textLimit - 2;
+      layoutMetrics.text_trimmed = textTrimmed;
+    }
+    if (topNote !== null) {
+      layoutMetrics.top_note_top = margin;
+      layoutMetrics.top_note_bottom = round(margin + topNote.height);
+    }
+    if (bottomNote !== null) {
+      layoutMetrics.bottom_note_top = bottomNoteTop;
+      layoutMetrics.bottom_note_bottom = round(bottomNoteTop + bottomNote.height);
+    }
     parts.push(
       textLines({
         lines: [copy.footer],
@@ -686,6 +925,16 @@ export function composeDesign({
         font: FONTS.mono
       })
     );
+    if (topNote !== null) {
+      parts.push(
+        noteLayer({
+          note: topNote,
+          x: margin,
+          firstBaseline: margin + Math.round(noteSize * 0.8),
+          fill: ink
+        })
+      );
+    }
 
     actions.push(
       photo !== null
@@ -698,35 +947,66 @@ export function composeDesign({
   } else {
     const textTop = round(height * 0.6);
     const columnWidth = width - margin * 2;
-    let headlineLines = wrapToWidth(copy.headline, TYPEFACES.display, headlineSize, columnWidth);
-    let bodyLines = wrapToWidth(copy.body, TYPEFACES.body, bodySize, columnWidth);
+    let coverHeadlineSize = headlineSize;
+    let coverBodySize = bodySize;
+    let headlineLines = wrapToWidth(copy.headline, TYPEFACES.display, coverHeadlineSize, columnWidth);
+    let bodyLines = wrapToWidth(copy.body, TYPEFACES.body, coverBodySize, columnWidth);
+    const noteSize = Math.max(12, round(kickerSize * 1.05));
+    const noteSpacing = Math.max(0, round(noteSize * 0.05));
+    const noteGap = Math.round(noteSize * 0.85);
+    const topNote =
+      copy.topText === null
+        ? null
+        : buildNoteBlock(copy.topText, { size: noteSize, maxWidth: columnWidth, spacing: noteSpacing });
+    const bottomNote =
+      copy.bottomText === null
+        ? null
+        : buildNoteBlock(copy.bottomText, { size: noteSize, maxWidth: columnWidth, spacing: noteSpacing });
+    const bottomFirstBaseline =
+      bottomNote === null
+        ? null
+        : height -
+          margin -
+          Math.round(noteSize * 0.25) -
+          (bottomNote.lines.length - 1) * bottomNote.lineHeight;
+    const bottomNoteTop =
+      bottomFirstBaseline === null ? null : bottomFirstBaseline - Math.round(noteSize * 0.8);
+    const textLimit = bottomNoteTop === null ? height - margin : bottomNoteTop - noteGap;
     const headlineLineHeight = (size) => round(size * 1.08);
     const bodyLineHeight = (size) => round(size * 1.5);
 
     const fits = () => {
-      const top = textTop + kickerSize * 2 + headlineSize;
-      const headlineBottom = top + (headlineLines.length - 1) * headlineLineHeight(headlineSize);
-      const bodyTop = height - margin - (bodyLines.length - 1) * bodyLineHeight(bodySize);
-      return bodyTop - headlineBottom >= bodySize * 1.2;
+      const top = textTop + kickerSize * 2 + coverHeadlineSize;
+      const headlineBottom = top + (headlineLines.length - 1) * headlineLineHeight(coverHeadlineSize);
+      const bodyTop = textLimit - (bodyLines.length - 1) * bodyLineHeight(coverBodySize);
+      return bodyTop - headlineBottom >= coverBodySize * 1.2;
     };
 
-    while (bodySize > 11 && !fits()) {
-      bodySize -= 1;
-      bodyLines = wrapToWidth(copy.body, TYPEFACES.body, bodySize, columnWidth);
+    while (coverBodySize > 11 && !fits()) {
+      coverBodySize -= 1;
+      bodyLines = wrapToWidth(copy.body, TYPEFACES.body, coverBodySize, columnWidth);
     }
-    while (headlineSize > 30 && !fits()) {
-      headlineSize -= 2;
-      bodySize = Math.max(11, round(headlineSize * 0.36));
-      headlineLines = wrapToWidth(copy.headline, TYPEFACES.display, headlineSize, columnWidth);
-      bodyLines = wrapToWidth(copy.body, TYPEFACES.body, bodySize, columnWidth);
+    while (coverHeadlineSize > 30 && !fits()) {
+      coverHeadlineSize -= 2;
+      coverBodySize = Math.max(11, round(coverHeadlineSize * 0.36));
+      headlineLines = wrapToWidth(copy.headline, TYPEFACES.display, coverHeadlineSize, columnWidth);
+      bodyLines = wrapToWidth(copy.body, TYPEFACES.body, coverBodySize, columnWidth);
     }
 
-    const headlineTop = textTop + kickerSize * 2 + headlineSize;
-    const bodyTop = height - margin - (bodyLines.length - 1) * bodyLineHeight(bodySize);
+    const headlineTop = textTop + kickerSize * 2 + coverHeadlineSize;
+    const bodyTop = textLimit - (bodyLines.length - 1) * bodyLineHeight(coverBodySize);
     layoutMetrics.text_top = textTop;
-    layoutMetrics.text_bottom = round(bodyTop + bodySize * 0.25);
-    layoutMetrics.rule_y = round(height - margin);
+    layoutMetrics.text_bottom = round(bodyTop + coverBodySize * 0.25);
+    layoutMetrics.rule_y = round(textLimit);
     layoutMetrics.text_overflow = !fits();
+    if (topNote !== null) {
+      layoutMetrics.top_note_top = margin;
+      layoutMetrics.top_note_bottom = round(margin + topNote.height);
+    }
+    if (bottomNote !== null) {
+      layoutMetrics.bottom_note_top = bottomNoteTop;
+      layoutMetrics.bottom_note_bottom = round(bottomNoteTop + bottomNote.height);
+    }
 
     parts.push(`<rect width="${width}" height="${height}" fill="${entry.hex}"/>`);
     parts.push(
@@ -735,6 +1015,15 @@ export function composeDesign({
             scrimLayer({ x: 0, y: textTop - round(height * 0.3), width, height: height - textTop + round(height * 0.3), colour: entry.hex, id: 'main' })
         : geometricField({ x: 0, y: 0, width, height, colour: entry.hex, id: 'main' })
     );
+    if (topNote !== null && photo !== null) {
+      parts.push(
+        topNoteScrim({
+          width,
+          height: round(margin + topNote.height + noteSize * 0.9),
+          id: 'top-note-cover'
+        })
+      );
+    }
     parts.push(
       textLines({
         lines: [copy.kicker.toUpperCase()],
@@ -752,8 +1041,8 @@ export function composeDesign({
         lines: headlineLines,
         x: margin,
         y: headlineTop,
-        lineHeight: headlineLineHeight(headlineSize),
-        size: headlineSize,
+        lineHeight: headlineLineHeight(coverHeadlineSize),
+        size: coverHeadlineSize,
         fill: ink,
         font: FONTS.display
       })
@@ -763,12 +1052,32 @@ export function composeDesign({
         lines: bodyLines,
         x: margin,
         y: bodyTop,
-        lineHeight: bodyLineHeight(bodySize),
-        size: bodySize,
+        lineHeight: bodyLineHeight(coverBodySize),
+        size: coverBodySize,
         fill: ink,
         font: FONTS.body
       })
     );
+    if (bottomNote !== null) {
+      parts.push(
+        noteLayer({
+          note: bottomNote,
+          x: margin,
+          firstBaseline: bottomFirstBaseline,
+          fill: ink
+        })
+      );
+    }
+    if (topNote !== null) {
+      parts.push(
+        noteLayer({
+          note: topNote,
+          x: margin,
+          firstBaseline: margin + Math.round(noteSize * 0.8),
+          fill: photo === null ? ink : '#fbf8f1'
+        })
+      );
+    }
 
     actions.push(
       photo !== null
@@ -779,11 +1088,20 @@ export function composeDesign({
     );
   }
 
+  if (copy.topText !== null) {
+    actions.push('The optional line written by the user is set at the top edge of the flyer.');
+  }
+  if (copy.bottomText !== null) {
+    actions.push('The optional line written by the user is set above the footer.');
+  }
+
   const svg = svgDocument({
     width,
     height,
     title: `${copy.headline} \u2014 ${context.label}`,
-    description: [copy.kicker, copy.headline, copy.subhead, copy.body, copy.footer].filter(Boolean).join(' \u2014 '),
+    description: [copy.topText, copy.kicker, copy.headline, copy.subhead, copy.body, copy.bottomText, copy.footer]
+      .filter(Boolean)
+      .join(' \u2014 '),
     content: parts.join('')
   });
 
@@ -818,7 +1136,9 @@ export function composeDesign({
       height,
       subject: context.subject,
       audience: context.audience,
-      text: context.text
+      text: context.text,
+      topText: context.topText,
+      bottomText: context.bottomText
     },
     colour: {
       colour_name: requested,

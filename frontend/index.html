@@ -59,6 +59,30 @@
             required
           ></textarea>
 
+          <div class="note-fields">
+            <div class="note-field">
+              <label class="field-label" for="flyer-top-text">Text above <span class="optional">optional</span></label>
+              <input
+                id="flyer-top-text"
+                name="topText"
+                type="text"
+                maxlength="200"
+                placeholder="Save the date — Saturday 14 November"
+              />
+            </div>
+            <div class="note-field">
+              <label class="field-label" for="flyer-bottom-text">Text below <span class="optional">optional</span></label>
+              <input
+                id="flyer-bottom-text"
+                name="bottomText"
+                type="text"
+                maxlength="200"
+                placeholder="Town Hall Square · Free entry"
+              />
+            </div>
+          </div>
+          <p class="hint">Optional. They are drawn at the top and bottom edge of the flyer; leave them empty and nothing changes.</p>
+
           <div class="form-row">
             <div class="upload-wrap">
               <img id="image-thumb" class="image-thumb" alt="" hidden />

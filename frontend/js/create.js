@@ -29,6 +29,8 @@ const dom = {
   status: document.getElementById('status'),
   form: document.getElementById('create-form'),
   text: document.getElementById('flyer-text'),
+  topText: document.getElementById('flyer-top-text'),
+  bottomText: document.getElementById('flyer-bottom-text'),
   imageFile: document.getElementById('flyer-image'),
   imageName: document.getElementById('image-name'),
   imageThumb: document.getElementById('image-thumb'),
@@ -116,6 +118,8 @@ function setBusy(busy, label = 'Creating…') {
   state.busy = busy;
   dom.create.disabled = busy;
   dom.text.disabled = busy;
+  dom.topText.disabled = busy;
+  dom.bottomText.disabled = busy;
   dom.imageFile.disabled = busy;
   dom.consent.disabled = busy;
   dom.imageRemove.disabled = busy;
@@ -326,6 +330,8 @@ async function chooseBackground(index) {
       body: {
         userId: state.userId,
         text: state.last.text,
+        topText: state.last.topText ?? state.last.design?.topText ?? null,
+        bottomText: state.last.bottomText ?? state.last.design?.bottomText ?? null,
         colourName: state.last.input.colourName,
         image: state.image?.dataUrl ?? null,
         design: state.last.design,
@@ -394,6 +400,8 @@ async function createFlyer() {
       body: {
         userId: state.userId,
         text,
+        topText: dom.topText.value.trim(),
+        bottomText: dom.bottomText.value.trim(),
         image: state.image?.dataUrl ?? null,
         consent: dom.consent.checked,
         design: {}

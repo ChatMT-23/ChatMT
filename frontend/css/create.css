@@ -335,6 +335,49 @@ img {
   cursor: wait;
 }
 
+.note-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.note-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.note-field input {
+  width: 100%;
+  min-height: 46px;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper-bright);
+  color: var(--ink);
+  font-size: 14px;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.note-field input::placeholder {
+  color: var(--faint);
+  opacity: 0.78;
+}
+.note-field input:focus {
+  border-color: var(--deep);
+  box-shadow: inset 0 -2px 0 var(--deep);
+}
+.note-field input:disabled {
+  opacity: 0.66;
+  cursor: wait;
+}
+
+.optional {
+  color: var(--faint);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+}
+
 .form-row {
   display: flex;
   align-items: center;
@@ -788,6 +831,9 @@ img {
   }
   .composer-card {
     border-radius: 22px;
+  }
+  .note-fields {
+    grid-template-columns: 1fr;
   }
   .form-row {
     align-items: stretch;
