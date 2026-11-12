@@ -1193,6 +1193,33 @@ test('the cut-out removes the original background and keeps the subject opaque',
   assert.ok(opaque > total * 0.1, 'the subject kept its own pixels');
 });
 
+test('the cut-out fringe carries the subject colour, not the old background', async () => {
+  const service = createCutoutService();
+  const result = await service.removeBackground({ image: await rimPhotoDataUrl() });
+  assert.equal(result.ok, true);
+
+  const cut = await Jimp.read(Buffer.from(result.image.split(',')[1], 'base64'));
+  const { data } = cut.bitmap;
+  let backgroundLike = 0;
+  let subjectLike = 0;
+  for (let index = 0; index < data.length; index += 4) {
+    const alpha = data[index + 3];
+    if (alpha < 48 || alpha > 208) continue;
+    const toBackground =
+      Math.abs(data[index] - 0xdd) + Math.abs(data[index + 1] - 0xe7) + Math.abs(data[index + 2] - 0xf0);
+    const toSubject =
+      Math.abs(data[index] - 0x3a) + Math.abs(data[index + 1] - 0x2b) + Math.abs(data[index + 2] - 0x22);
+    if (toBackground + 12 < toSubject) backgroundLike++;
+    else if (toSubject + 12 < toBackground) subjectLike++;
+  }
+
+  assert.ok(subjectLike > 20, 'the partly transparent edge keeps the subject');
+  assert.ok(
+    backgroundLike <= subjectLike * 0.35,
+    `the edge is not the old background: ${backgroundLike} background pixels against ${subjectLike} subject pixels`
+  );
+});
+
 test('a cut-out subject is baked into the generated background without a framed inset', async () => {
   const meanings = loadStandards({ directory: MEANINGS_DIRECTORY }).meanings;
   const background = new Jimp({ width: 300, height: 400, color: 0x2f5d50ff });
@@ -1354,6 +1381,30 @@ async function portraitPhotoDataUrl() {
   for (let y = 360; y < 720; y++) {
     const half = 160 + ((y - 360) / 360) * 60;
     for (let x = 160; x < 480; x++) {
+      if (Math.abs(x - 320) < half) image.setPixelColor(0x3a2b22ff, x, y);
+    }
+  }
+  const buffer = await image.getBuffer('image/jpeg', { quality: 90 });
+  return `data:image/jpeg;base64,${buffer.toString('base64')}`;
+}
+
+async function rimPhotoDataUrl() {
+  const width = 640;
+  const height = 840;
+  const image = new Jimp({ width, height, color: 0xdde7f0ff });
+  for (let y = 170; y < 380; y++) {
+    for (let x = 220; x < 420; x++) {
+      const dx = x - 320;
+      const dy = y - 270;
+      if (dx * dx + dy * dy < 80 * 80) image.setPixelColor(0x3a2b22ff, x, y);
+    }
+  }
+  for (let y = 330; y < 400; y++) {
+    for (let x = 300; x < 340; x++) image.setPixelColor(0x3a2b22ff, x, y);
+  }
+  for (let y = 380; y < 760; y++) {
+    const half = 100 + ((y - 380) / 380) * 130;
+    for (let x = 0; x < width; x++) {
       if (Math.abs(x - 320) < half) image.setPixelColor(0x3a2b22ff, x, y);
     }
   }
